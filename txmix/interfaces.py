@@ -79,8 +79,8 @@ class IPKIClient(Interface):
 
 class NodeDescriptor(object):
 
-    def __init__(self):
-        pass
-
-    def get_id(self):
-        return self.id
+    def __init__(self, id, pub_key, transport_name, addr):
+        self.id = id
+        self.public_key = pub_key
+        self.transport_name = transport_name
+        self.addr = addr

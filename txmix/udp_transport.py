@@ -12,6 +12,7 @@ class UDPClientTransport(DatagramProtocol):
     """
     implements the IMixClient interface u
     """
+    name = "udp"
 
     def __init__(self, received_callback):
         self.received_callback = received_callback
