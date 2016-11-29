@@ -1,48 +1,39 @@
 
 from __future__ import print_function
 
-from sphinxmixcrypto import SphinxParams, GroupECC, Chacha_Lioness, Chacha20_stream_cipher, Blake2_hash
 from sphinxmixcrypto import rand_subset, SphinxClient, create_forward_message
+from txmix.common import DEFAULT_ENCODING_HANDLER, DEFAULT_CRYPTO_PARAMETERS
 
-from txmix import CBOREncodingHandler
 
-
-class MixClientFactory(object):
+class ClientFactory(object):
     """
     Factory class for creating mix clients
-    with parameterized transports and pki.
-
-    Uses the sphinx mix packet format with:
-    CBOR serialization format,
-    curve25519 public keys, blake2b hash,
-    chacha20 stream cipher, lioness wide block
-    cipher composed using blake2b and chacha20
+    with parameterized transports, pki and sphinx crypto primitives
     """
-    def __init__(self, reactor, transport, pki):
+    def __init__(self, reactor, transport, pki, params=None, encoding_handler=None):
         self.reactor = reactor
         self.transport = transport
         self.pki = pki
 
-    @classmethod
-    def from_transport(cls, transport):
-        return cls(transport=transport)
+        if params is None:
+            self.params = DEFAULT_CRYPTO_PARAMETERS
+        else:
+            self.params = params
 
-    def build(self, protocol):
-        hops = 5 # XXX
-        params = SphinxParams(
-            hops, group_class = GroupECC,
-            hash_func = Blake2_hash,
-            lioness_class = Chacha_Lioness,
-            stream_cipher = Chacha20_stream_cipher,
-        )
-        client = SphinxClientProtocol(params, self.pki, self.transport, CBOREncodingHandler())
+        if encoding_handler is None:
+            self.encoding_handler = DEFAULT_ENCODING_HANDLER
+        else:
+            self.encoding_handler = encoding_handler
+
+    def build(self, protocol, addr):
+        client_protocol = ClientProtocol(self.params, self.pki, self.transport, self.encoding_handler)
         protocol.setTransport(self.transport)
-        self.transport.setClient(client)
-        self.transport.start()
-        return client
+        self.transport.setProtocol(client_protocol)
+        self.transport.listen(self.reactor, addr)
+        return client_protocol
 
 
-class SphinxClientProtocol(object):
+class ClientProtocol(object):
     """
     I am a sphinx mix network client protocol which
     means I have a producer/consumer relationship with
@@ -62,6 +53,7 @@ class SphinxClientProtocol(object):
         self.protocol.messageReceived(unwrapped_message)
 
     def messageSend(self, route, message):
+        print("messageSend")
         serialized_message = self.encoding.serialize(message)
         first_hop_addr = self.pki.getAddr(self.transport.name, route[0])
         consensus = self.pki.get_consensus()

@@ -4,29 +4,34 @@ from __future__ import print_function
 from zope.interface import implementer
 from twisted.internet.protocol import DatagramProtocol
 
-from txmix import IMixClientTransport
+from txmix import IMixTransport
 
 
-@implementer(IMixClientTransport)
-class UDPClientTransport(DatagramProtocol):
+@implementer(IMixTransport)
+class UDPTransport(DatagramProtocol):
     """
     implements the IMixClientTransport interface
     """
     name = "udp"
 
-    def __init__(self, interface, port):
-        self.interface = interface
-        self.port = port
+    def __init__(self):
         self.received_callback = None
 
-    def setClient(self, client):
+    def setProtocol(self, protocol):
         """
         sets the client class as the consumer of raw mixnet messages
         """
-        self.received_callback = client.received
+        self.received_callback = protocol.received
 
-    def start(self):
-        self.reactor.listenUDP(self.port, self, interface=self.interface)
+    def listen(self, reactor, addr):
+        """
+        make this transport begin listening on the specified interface and UDP port
+        interface must be an IP address
+        """
+        assert self.received_callback is not None
+        self.reactor = reactor
+        interface, port = addr
+        self.reactor.listenUDP(port, self, interface=interface)
 
     def send(self, addr, message):
         """

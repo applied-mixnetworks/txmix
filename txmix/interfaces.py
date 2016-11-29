@@ -5,12 +5,22 @@ Interfaces for writing mix nets
 from zope.interface import Interface, Attribute
 
 
-class IMixClientTransport(Interface):
+class IMixTransport(Interface):
     """
     Interface for a two-way mix network client transport.
     """
 
     name = Attribute("""name of transport handler""")
+
+    def start():
+        """
+        start the transport using the twisted reactor
+        """
+
+    def setProtocol(protocol):
+        """
+        Set the protocol consumer of this transport.
+        """
 
     def received(message):
         """
@@ -19,7 +29,7 @@ class IMixClientTransport(Interface):
 
     def send(addr, message):
         """
-        Send a message to a mix network node identified by node_id.
+        Send a message to a mix network node identified by addr.
         """
 
 
