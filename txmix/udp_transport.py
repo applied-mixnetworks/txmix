@@ -17,11 +17,11 @@ class UDPTransport(DatagramProtocol):
     def __init__(self):
         self.received_callback = None
 
-    def setProtocol(self, protocol):
+    def setProtocol(self, nodeProtocol):
         """
         sets the client class as the consumer of raw mixnet messages
         """
-        self.received_callback = protocol.received
+        self.received_callback = nodeProtocol.messageReceived
 
     def listen(self, reactor, addr):
         """

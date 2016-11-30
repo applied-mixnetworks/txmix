@@ -96,7 +96,7 @@ def build_mixnet_nodes(params, node_factory):
         node_state.name = node_name
         addr = i
         dummy_node_transport = DummyTransport()
-        node_protocol = node_factory.build(TestNodeProtocol(), node_state, dummy_node_transport, addr)
+        node_protocol = node_factory.buildProtocol(TestMixAppProtocol(), node_state, dummy_node_transport, addr)
         nodes[node_id] = node_protocol
         node_descriptor = NodeDescriptor(node_id, public_key, "dummy", addr)
         consensus[node_descriptor.id] = node_descriptor
@@ -125,7 +125,7 @@ class EchoClientProtocol(object):
         #outgoing_message = {'message':'ping'}
         #self.transport.send(message['surb'], outgoing_message)
 
-class TestNodeProtocol(object):
+class TestMixAppProtocol(object):
     sent_mix = []
     sent_exit_mix = []
     sent_nymserver = []
@@ -179,7 +179,7 @@ def test_NodeProtocol():
 
     dummy_client_transport = DummyTransport()
     client_factory = ClientFactory(fake_reactor, dummy_client_transport, pki)
-    client = client_factory.build(EchoClientProtocol(), "fake_client_addr")
+    client = client_factory.buildProtocol(EchoClientProtocol(), "fake_client_addr")
 
     dest = pki.get_consensus().keys()[0]
     route = generate_route(params, pki, dest)

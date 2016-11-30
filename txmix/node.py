@@ -16,7 +16,7 @@ class NodeFactory(object):
         if encoding_handler is None:
             self.encoding_handler = DEFAULT_ENCODING_HANDLER
 
-    def build(self, protocol, node_state, transport, addr):
+    def buildProtocol(self, protocol, node_state, transport, addr):
         node_protocol = NodeProtocol(node_state, self.params, self.pki, transport, self.encoding_handler)
         node_protocol.setProtocol(protocol)
         protocol.setTransport(node_protocol)
@@ -39,15 +39,15 @@ class NodeProtocol(object):
         self.encoding = encoding
         self.protocol = None
 
-    def setProtocol(self, protocol):
-        self.protocol = protocol
+    def setProtocol(self, application_protocol):
+        self.protocol = application_protocol
 
     def messageReceived(self, message):
         """
         i receive messages and proxy them
         to my attached protocol after deserializing and unwrapping
         """
-        sphinx_packet = self.encoding.deserialize(message)
+        sphinx_packet = self.encoding.deserialize_sphinx_packet(message)
         header = sphinx_packet['alpha'], sphinx_packet['beta'], sphinx_packet['gamma']
         message_result = self.sphinx_node.unwrap(header, sphinx_packet['delta'])
         self.protocol.messageResultReceived(message_result)
