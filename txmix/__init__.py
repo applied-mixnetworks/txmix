@@ -2,7 +2,8 @@
 txmix is a messaging API for building mix networks
 """
 
-from txmix.interfaces import IMixTransport, IPKIClient, NodeDescriptor
+from txmix.interfaces import IMixTransport, IPKIClient
+from txmix.common import NodeDescriptor
 from txmix.client import ClientProtocol, ClientFactory
 from txmix.node import NodeFactory
 from txmix.udp_transport import UDPTransport

@@ -10,26 +10,20 @@ from txmix import IMixTransport
 @implementer(IMixTransport)
 class UDPTransport(DatagramProtocol):
     """
-    implements the IMixClientTransport interface
+    implements the IMixTransport interface
     """
     name = "udp"
 
-    def __init__(self):
+    def __init__(self, reactor):
+        self.reactor = reactor
         self.received_callback = None
 
-    def setProtocol(self, nodeProtocol):
-        """
-        sets the client class as the consumer of raw mixnet messages
-        """
-        self.received_callback = nodeProtocol.messageReceived
-
-    def listen(self, reactor, addr):
+    def start(self, addr, nodeProtocol):
         """
         make this transport begin listening on the specified interface and UDP port
         interface must be an IP address
         """
-        assert self.received_callback is not None
-        self.reactor = reactor
+        self.received_callback = nodeProtocol.messageReceived
         interface, port = addr
         self.reactor.listenUDP(port, self, interface=interface)
 

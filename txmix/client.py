@@ -10,8 +10,7 @@ class ClientFactory(object):
     Factory class for creating mix clients
     with parameterized transports, pki and sphinx crypto primitives
     """
-    def __init__(self, reactor, transport, pki, params=None):
-        self.reactor = reactor
+    def __init__(self, transport, pki, params=None):
         self.transport = transport
         self.pki = pki
 
@@ -23,8 +22,7 @@ class ClientFactory(object):
     def buildProtocol(self, protocol, addr):
         client_protocol = ClientProtocol(self.params, self.pki, self.transport)
         protocol.setTransport(self.transport)
-        self.transport.setProtocol(client_protocol)
-        self.transport.listen(self.reactor, addr)
+        self.transport.start(addr, client_protocol)
         return client_protocol
 
 

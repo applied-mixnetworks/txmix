@@ -28,10 +28,7 @@ class DummyTransport(object):
         self.receive = []
         self.sent = []
 
-    def listen(self, reactor, addr):
-        pass
-
-    def setProtocol(self, protocol):
+    def start(self, addr, protocol):
         self.received_callback = protocol.messageReceived
 
     def received(self, message):
@@ -171,14 +168,13 @@ class FakeMixProtocol(object):
 
 def test_NodeProtocol():
     pki = FakePKI()
-    fake_reactor = FakeReactor()
-    node_factory = NodeFactory(fake_reactor, pki)
+    node_factory = NodeFactory(pki)
     params = node_factory.params
     nodes, consensus, addr_to_nodes = build_mixnet_nodes(params, node_factory)
     pki.set_consensus(consensus)
 
     dummy_client_transport = DummyTransport()
-    client_factory = ClientFactory(fake_reactor, dummy_client_transport, pki)
+    client_factory = ClientFactory(dummy_client_transport, pki)
     client = client_factory.buildProtocol(EchoClientProtocol(), "fake_client_addr")
 
     dest = pki.get_consensus().keys()[0]

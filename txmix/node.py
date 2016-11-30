@@ -6,8 +6,7 @@ from txmix.common import DEFAULT_CRYPTO_PARAMETERS, SphinxPacketEncoding
 
 
 class NodeFactory(object):
-    def __init__(self, reactor, pki, params=None):
-        self.reactor = reactor
+    def __init__(self, pki, params=None):
         self.pki = pki
         if params is None:
             self.params = DEFAULT_CRYPTO_PARAMETERS
@@ -18,8 +17,7 @@ class NodeFactory(object):
         node_protocol = NodeProtocol(node_state, self.params, self.pki, transport)
         node_protocol.setProtocol(protocol)
         protocol.setTransport(node_protocol)
-        transport.setProtocol(node_protocol)
-        transport.listen(self.reactor, addr)
+        transport.start(addr, node_protocol)
         return node_protocol
 
 
