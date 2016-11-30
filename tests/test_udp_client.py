@@ -8,7 +8,7 @@ from sphinxmixcrypto import SphinxParams, GroupECC, Chacha_Lioness, Chacha20_str
 from sphinxmixcrypto import generate_node_keypair, generate_node_id_name
 from sphinxmixcrypto import rand_subset, SphinxClient, create_forward_message, SphinxNodeState
 
-from txmix import IPKIClient, NodeDescriptor, CBOREncodingHandler, IMixTransport, ClientFactory
+from txmix import IPKIClient, NodeDescriptor, IMixTransport, ClientFactory
 from txmix import NodeFactory
 
 import binascii
@@ -96,7 +96,7 @@ def build_mixnet_nodes(params, node_factory):
         node_state.name = node_name
         addr = i
         dummy_node_transport = DummyTransport()
-        node_protocol = node_factory.buildProtocol(TestMixAppProtocol(), node_state, dummy_node_transport, addr)
+        node_protocol = node_factory.buildProtocol(FakeMixProtocol(), node_state, dummy_node_transport, addr)
         nodes[node_id] = node_protocol
         node_descriptor = NodeDescriptor(node_id, public_key, "dummy", addr)
         consensus[node_descriptor.id] = node_descriptor
@@ -117,15 +117,15 @@ class EchoClientProtocol(object):
         self.transport = transport
 
     def messageReceived(self, message):
-        if message.haskey('text'):
-            if message['text'] == 'ping':
-                print("ping received")
+        if message == b"ping":
+            print("ping received")
+            return
         print("non-ping received")
         # XXX send a reply ping
         #outgoing_message = {'message':'ping'}
         #self.transport.send(message['surb'], outgoing_message)
 
-class TestMixAppProtocol(object):
+class FakeMixProtocol(object):
     sent_mix = []
     sent_exit_mix = []
     sent_nymserver = []
@@ -183,7 +183,7 @@ def test_NodeProtocol():
 
     dest = pki.get_consensus().keys()[0]
     route = generate_route(params, pki, dest)
-    message = {'text' : b'ping'}
+    message = b"ping"
     client.messageSend(route, message)
 
     dest_addr, message = dummy_client_transport.sent.pop()
@@ -203,6 +203,5 @@ def test_NodeProtocol():
         node_protocol.transport.received(message)
 
     destination, message = node_protocol.protocol.sent_exit_mix.pop()
-    encoding_handler = CBOREncodingHandler()
-    deserialized_message = encoding_handler.deserialize(message['delta'])
+    deserialized_message = message['delta']
     print("exit node delivers %s to %s" % (deserialized_message, binascii.hexlify(destination)))

@@ -2,7 +2,7 @@
 from __future__ import print_function
 
 from sphinxmixcrypto import rand_subset, SphinxClient, create_forward_message
-from txmix.common import DEFAULT_ENCODING_HANDLER, DEFAULT_CRYPTO_PARAMETERS
+from txmix.common import DEFAULT_CRYPTO_PARAMETERS, SphinxPacketEncoding
 
 
 class ClientFactory(object):
@@ -10,7 +10,7 @@ class ClientFactory(object):
     Factory class for creating mix clients
     with parameterized transports, pki and sphinx crypto primitives
     """
-    def __init__(self, reactor, transport, pki, params=None, encoding_handler=None):
+    def __init__(self, reactor, transport, pki, params=None):
         self.reactor = reactor
         self.transport = transport
         self.pki = pki
@@ -20,13 +20,8 @@ class ClientFactory(object):
         else:
             self.params = params
 
-        if encoding_handler is None:
-            self.encoding_handler = DEFAULT_ENCODING_HANDLER
-        else:
-            self.encoding_handler = encoding_handler
-
     def buildProtocol(self, protocol, addr):
-        client_protocol = ClientProtocol(self.params, self.pki, self.transport, self.encoding_handler)
+        client_protocol = ClientProtocol(self.params, self.pki, self.transport)
         protocol.setTransport(self.transport)
         self.transport.setProtocol(client_protocol)
         self.transport.listen(self.reactor, addr)
@@ -40,12 +35,12 @@ class ClientProtocol(object):
     a sphinx mix network client transport. My only responsibility
     is to take care of encryption and serialization of messages.
     """
-    def __init__(self, params, pki, transport, encoding):
+    def __init__(self, params, pki, transport):
         self.params = params
         self.sphinx_client = SphinxClient(params)
         self.pki = pki
         self.transport = transport
-        self.encoding = encoding
+        self.encoding = SphinxPacketEncoding(params)
 
         consensus = self.pki.get_consensus()
         self.node_key_map = {}
@@ -53,14 +48,14 @@ class ClientProtocol(object):
             self.node_key_map[node_id] = node_desc.public_key
 
     def messageReceived(self, message):
-        nym_id, delta = self.encoding.deserialize(message)
+        # XXX fix me
+        #nym_id, delta = self.encoding.deserialize(message)
         unwrapped_message = self.sphinx_client.decrypt(nym_id, delta)
         self.protocol.messageReceived(unwrapped_message)
 
     def messageSend(self, route, message):
         print("messageSend")
-        serialized_message = self.encoding.serialize(message)
         first_hop_addr = self.pki.getAddr(self.transport.name, route[0])
-        alpha, beta, gamma, delta = create_forward_message(self.params, route, self.node_key_map, route[-1], serialized_message)
-        serialized_sphinx_packet = self.encoding.serialize_sphinx_packet(alpha=alpha, beta=beta, gamma=gamma, delta=delta)
+        alpha, beta, gamma, delta = create_forward_message(self.params, route, self.node_key_map, route[-1], message)
+        serialized_sphinx_packet = self.encoding.packetEncode(alpha, beta, gamma, delta)
         self.transport.send(first_hop_addr, serialized_sphinx_packet)
