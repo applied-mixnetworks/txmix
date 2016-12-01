@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from zope.interface import implementer
-from twisted.internet import reactor
 from twisted.internet.interfaces import IReactorCore
 
-from sphinxmixcrypto import SphinxParams, GroupECC, Chacha_Lioness, Chacha20_stream_cipher, Blake2_hash
 from sphinxmixcrypto import generate_node_keypair, generate_node_id_name
-from sphinxmixcrypto import rand_subset, SphinxClient, create_forward_message, SphinxNodeState
+from sphinxmixcrypto import rand_subset, SphinxNodeState
 
 from txmix import IPKIClient, NodeDescriptor, IMixTransport, ClientFactory
 from txmix import NodeFactory
