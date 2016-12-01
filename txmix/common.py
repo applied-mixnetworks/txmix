@@ -1,12 +1,13 @@
 
 from __future__ import print_function
 
-from sphinxmixcrypto import SphinxParams, GroupECC, Chacha_Lioness, Chacha20_stream_cipher, Blake2_hash
+from sphinxmixcrypto import SphinxParams, GroupECC, Chacha_Lioness, Chacha20_stream_cipher, Blake2_hash, Blake2_hash_mac
 
 
 DEFAULT_CRYPTO_PARAMETERS = SphinxParams(
     5, group_class = GroupECC, # 5 hops
     hash_func = Blake2_hash,
+    hash_mac_func = Blake2_hash_mac,
     lioness_class = Chacha_Lioness,
     stream_cipher = Chacha20_stream_cipher,
 )
