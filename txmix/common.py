@@ -5,7 +5,8 @@ from sphinxmixcrypto import SphinxParams, GroupECC, Chacha_Lioness, Chacha20_str
 
 
 DEFAULT_CRYPTO_PARAMETERS = SphinxParams(
-    5, group_class = GroupECC, # 5 hops
+    path_len = 5,
+    group_class = GroupECC,
     hash_func = Blake2_hash,
     hash_mac_func = Blake2_hash_mac,
     lioness_class = Chacha_Lioness,
