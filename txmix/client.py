@@ -45,15 +45,14 @@ class ClientProtocol(object):
         for node_id, node_desc in consensus.items():
             self.node_key_map[node_id] = node_desc.public_key
 
-    def messageReceived(self, message):
+    def message_received(self, message):
         # XXX fix me
         #nym_id, delta = self.encoding.deserialize(message)
         unwrapped_message = self.sphinx_client.decrypt(nym_id, delta)
         self.protocol.messageReceived(unwrapped_message)
 
-    def messageSend(self, route, message):
-        print("messageSend")
-        first_hop_addr = self.pki.getAddr(self.transport.name, route[0])
+    def send(self, route, message):
+        first_hop_addr = self.pki.get_mix_addr(self.transport.name, route[0])
         alpha, beta, gamma, delta = create_forward_message(self.params, route, self.node_key_map, route[-1], message)
         serialized_sphinx_packet = self.encoding.packetEncode(alpha, beta, gamma, delta)
         self.transport.send(first_hop_addr, serialized_sphinx_packet)

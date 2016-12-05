@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from zope.interface import implementer
-from twisted.internet.interfaces import IReactorCore
 
 from sphinxmixcrypto import generate_node_keypair, generate_node_id_name
 from sphinxmixcrypto import rand_subset, SphinxNodeState
@@ -16,6 +15,12 @@ class NodeTransportMismatchError(Exception):
     """
     """
 
+
+class NymserverTransportMismatchError(Exception):
+    """
+    """
+
+
 @implementer(IMixTransport)
 class DummyTransport(object):
 
@@ -27,7 +32,7 @@ class DummyTransport(object):
         self.sent = []
 
     def start(self, addr, protocol):
-        self.received_callback = protocol.messageReceived
+        self.received_callback = protocol.message_received
 
     def received(self, message):
         print("dummy transport received message len %s" % len(message))
@@ -43,8 +48,9 @@ class DummyTransport(object):
 class FakePKI():
     consensus = None
 
-    def __init__(self, consensus=None):
-        self.consensus = consensus
+    def __init__(self, nymserver_addr, nymserver_transport):
+        self.nymserver_addr = nymserver_addr
+        self.nymserver_transport = nymserver_transport
 
     def set_consensus(self, consensus):
         self.consensus = consensus
@@ -55,19 +61,16 @@ class FakePKI():
     def register(self, mix_descriptor):
         pass
 
-    def getAddr(self, transport_name, node_id):
+    def get_mix_addr(self, transport_name, node_id):
         node_descriptor = self.consensus[node_id]
         if node_descriptor.transport_name != transport_name:
-            print("%s != %s" % (node_descriptor.transport_name, transport_name))
             raise NodeTransportMismatchError
         return node_descriptor.addr
 
-
-@implementer(IReactorCore)
-class FakeReactor:
-
-    def listenUDP(self, port, transport, interface=None):
-        pass
+    def get_nymserver_addr(self, transport_name):
+        if self.nymserver_transport != transport_name:
+            raise NymserverTransportMismatchError("failed to get nymserver address")
+        return self.nymserver
 
 
 def build_mixnet_nodes(params, node_factory):
@@ -135,7 +138,7 @@ class FakeMixProtocol(object):
         self.sent_mix.append((destination, sphinx_message))
 
     def send_to_nymserver(self, nym_id, message):
-        self.sent_nymserver((nym_id, message))
+        self.sent_nymserver.append((nym_id, message))
 
     def messageResultReceived(self, messageResult):
         if messageResult.tuple_next_hop:
@@ -165,7 +168,7 @@ class FakeMixProtocol(object):
         pass
 
 def test_NodeProtocol():
-    pki = FakePKI()
+    pki = FakePKI(None, None)
     node_factory = NodeFactory(pki)
     params = node_factory.params
     nodes, consensus, addr_to_nodes = build_mixnet_nodes(params, node_factory)
@@ -178,7 +181,7 @@ def test_NodeProtocol():
     dest = pki.get_consensus().keys()[0]
     route = generate_route(params, pki, dest)
     message = b"ping"
-    client.messageSend(route, message)
+    client.send(route, message)
 
     dest_addr, message = dummy_client_transport.sent.pop()
     print("dummy client transport sending message to %s" % dest_addr)
@@ -190,7 +193,7 @@ def test_NodeProtocol():
             destination, message = node_protocol.protocol.sent_mix.pop()
         except IndexError:
             break
-        node_protocol.messageSend(destination, message)
+        node_protocol.send_to_mix(destination, message)
         destination, message = node_protocol.transport.sent.pop()
 
         node_protocol = addr_to_nodes[destination]

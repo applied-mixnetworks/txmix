@@ -78,6 +78,12 @@ class IPKIClient(Interface):
         Register a mix node with the PKI.
         """
 
-    def getAddr(transport_handler_name, node_id):
+    def get_mix_addr(transport_handler_name, node_id):
         """
+        returns the adress of the mix specified by node_id
+        """
+
+    def get_nymserver_addr(transport_handler_name):
+        """
+        returns the address of the nymserver
         """

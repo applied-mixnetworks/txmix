@@ -1,2 +1,4 @@
 sphinxmixcrypto==0.0.1
+Twisted<=16.6.0
+zope.interface<=4.3.2
 cbor>=1.0.0

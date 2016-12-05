@@ -15,7 +15,7 @@ class NodeFactory(object):
 
     def buildProtocol(self, protocol, node_state, transport, addr):
         node_protocol = NodeProtocol(node_state, self.params, self.pki, transport)
-        node_protocol.setProtocol(protocol)
+        node_protocol.set_protocol(protocol)
         protocol.setTransport(node_protocol)
         transport.start(addr, node_protocol)
         return node_protocol
@@ -35,10 +35,10 @@ class NodeProtocol(object):
         self.encoding = SphinxPacketEncoding(params)
         self.protocol = None
 
-    def setProtocol(self, application_protocol):
+    def set_protocol(self, application_protocol):
         self.protocol = application_protocol
 
-    def messageReceived(self, message):
+    def message_received(self, message):
         """
         i receive messages and proxy them
         to my attached protocol after deserializing and unwrapping
@@ -48,7 +48,14 @@ class NodeProtocol(object):
         message_result = self.sphinx_node.unwrap(header, sphinx_packet['delta'])
         self.protocol.messageResultReceived(message_result)
 
-    def messageSend(self, destination, message):
+    def send_to_mix(self, destination, message):
         serialized_message = self.encoding.packetEncode(message['alpha'], message['beta'], message['gamma'], message['delta'])
-        addr = self.pki.getAddr(self.transport.name, destination)
+        addr = self.pki.get_mix_addr(self.transport.name, destination)
         self.transport.send(addr, serialized_message)
+
+    def send_to_nymserver(self, nym_id, message):
+        addr = self.pki.get_nymserver_addr(self.transport.name)
+        self.transport.send(addr, message)
+
+    def send_to_client(self, client_id, message_id, message):
+        pass
