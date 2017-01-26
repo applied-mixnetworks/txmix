@@ -1,8 +1,9 @@
 
 from __future__ import print_function
 
-from sphinxmixcrypto import SphinxNode
-from txmix.common import DEFAULT_CRYPTO_PARAMETERS, SphinxPacketEncoding
+from sphinxmixcrypto import sphinx_packet_unwrap
+from txmix.common import DEFAULT_CRYPTO_PARAMETERS, encode_sphinx_packet, decode_sphinx_packet
+from txmix.common import encode_sphinx_packet
 
 
 class NodeFactory(object):
@@ -29,10 +30,9 @@ class NodeProtocol(object):
 
     def __init__(self, state, params, pki, transport):
         self.params = params
-        self.sphinx_node = SphinxNode(params, state=state)
+        self.node_state = state
         self.pki = pki
         self.transport = transport
-        self.encoding = SphinxPacketEncoding(params)
         self.protocol = None
 
     def set_protocol(self, application_protocol):
@@ -43,13 +43,13 @@ class NodeProtocol(object):
         i receive messages and proxy them
         to my attached protocol after deserializing and unwrapping
         """
-        sphinx_packet = self.encoding.packetDecode(message)
-        header = sphinx_packet['alpha'], sphinx_packet['beta'], sphinx_packet['gamma']
-        message_result = self.sphinx_node.unwrap(header, sphinx_packet['delta'])
+        sphinx_packet = decode_sphinx_packet(self.params, message)
+        print("sphinx packet %s" % sphinx_packet)
+        message_result = sphinx_packet_unwrap(self.params, self.node_state, sphinx_packet)
         self.protocol.messageResultReceived(message_result)
 
     def send_to_mix(self, destination, message):
-        serialized_message = self.encoding.packetEncode(message['alpha'], message['beta'], message['gamma'], message['delta'])
+        serialized_message = encode_sphinx_packet(message['alpha'], message['beta'], message['gamma'], message['delta'])
         addr = self.pki.get_mix_addr(self.transport.name, destination)
         self.transport.send(addr, serialized_message)
 

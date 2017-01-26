@@ -1,17 +1,10 @@
 
 from __future__ import print_function
 
-from sphinxmixcrypto import SphinxParams, GroupECC, Chacha_Lioness, Chacha20_stream_cipher, Blake2_hash, Blake2_hash_mac
+from sphinxmixcrypto import SphinxParams, SphinxPacket
 
 
-DEFAULT_CRYPTO_PARAMETERS = SphinxParams(
-    path_len = 5,
-    group_class = GroupECC,
-    hash_func = Blake2_hash,
-    hash_mac_func = Blake2_hash_mac,
-    lioness_class = Chacha_Lioness,
-    stream_cipher = Chacha20_stream_cipher,
-)
+DEFAULT_CRYPTO_PARAMETERS = SphinxParams(5, 1024)
 
 
 class NodeDescriptor(object):
@@ -22,20 +15,14 @@ class NodeDescriptor(object):
         self.transport_name = transport_name
         self.addr = addr
 
+def decode_sphinx_packet(params, packet):
+    alpha, beta, gamma, delta = params.get_dimensions()
+    _alpha = packet[:alpha]
+    _beta  = packet[alpha:alpha+beta]
+    _gamma = packet[alpha+beta:alpha+beta+gamma]
+    _delta = packet[alpha+beta+gamma:]
+    sphinx_packet = SphinxPacket(_alpha, _beta, _gamma, _delta)
+    return sphinx_packet
 
-class SphinxPacketEncoding(object):
-
-    def __init__(self, params):
-        self.params = params
-
-    def packetDecode(self, packet):
-        alpha, beta, gamma, delta = self.params.get_dimensions()
-        sphinx_packet = {}
-        sphinx_packet['alpha'] = packet[:alpha]
-        sphinx_packet['beta']  = packet[alpha:alpha+beta]
-        sphinx_packet['gamma'] = packet[alpha+beta:alpha+beta+gamma]
-        sphinx_packet['delta'] = packet[alpha+beta+gamma:]
-        return sphinx_packet
-
-    def packetEncode(self, alpha, beta, gamma, delta):
-        return alpha + beta + gamma + delta
+def encode_sphinx_packet(alpha, beta, gamma, delta):
+    return alpha + beta + gamma + delta
