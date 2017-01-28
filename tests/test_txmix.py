@@ -1,18 +1,28 @@
 # -*- coding: utf-8 -*-
 
+import zope.interface
 from zope.interface import implementer
 
 from sphinxmixcrypto import generate_node_keypair, generate_node_id_name
 from sphinxmixcrypto import rand_subset
 from sphinxmixcrypto import sphinx_packet_unwrap, SphinxPacket, generate_node_keypair, generate_node_id_name
 from sphinxmixcrypto.common import RandReader
-from sphinxmixcrypto import PacketReplayCacheDict
+from sphinxmixcrypto import PacketReplayCacheDict, IMixPrivateKey, IMixPKI
 
-from txmix import IPKIClient, NodeDescriptor, IMixTransport, ClientFactory
+from txmix import NodeDescriptor, IMixTransport, ClientFactory
 from txmix import NodeFactory
 
 import binascii
 
+
+@zope.interface.implementer(IMixPrivateKey)
+class SphinxNodeKeyState:
+
+    def __init__(self, private_key):
+        self.private_key = private_key
+
+    def get_private_key(self):
+        return self.private_key
 
 
 class FixedNoiseReader():
@@ -65,36 +75,32 @@ class DummyTransport(object):
         self.sent.append((addr, message))
 
 
-@implementer(IPKIClient)
-class FakePKI():
-    consensus = None
+@zope.interface.implementer(IMixPKI)
+class DummyPKI(object):
 
-    def __init__(self, nymserver_addr, nymserver_transport):
-        self.nymserver_addr = nymserver_addr
-        self.nymserver_transport = nymserver_transport
+    def __init__(self):
+        self.node_map = {}
+        self.addr_map = {}
 
-    def set_consensus(self, consensus):
-        self.consensus = consensus
+    def set(self, key_id, pub_key, addr):
+        assert key_id not in self.node_map.keys()
+        self.node_map[key_id] = pub_key
+        self.addr_map[key_id] = addr
 
-    def get_consensus(self):
-        return self.consensus
+    def get(self, key_id):
+        return self.node_map[key_id]
 
-    def register(self, mix_descriptor):
+    def identities(self):
+        return self.node_map.keys()
+
+    def get_mix_addr(self, transport_name, key_id):
+        return self.addr_map[key_id]
+
+    def rotate(self, key_id, new_key_id, new_pub_key, signature):
         pass
 
-    def get_mix_addr(self, transport_name, node_id):
-        node_descriptor = self.consensus[node_id]
-        if node_descriptor.transport_name != transport_name:
-            raise NodeTransportMismatchError
-        return node_descriptor.addr
 
-    def get_nymserver_addr(self, transport_name):
-        if self.nymserver_transport != transport_name:
-            raise NymserverTransportMismatchError("failed to get nymserver address")
-        return self.nymserver
-
-
-def build_mixnet_nodes(params, node_factory, rand_reader):
+def build_mixnet_nodes(pki, params, node_factory, rand_reader):
     """
     i am a helper function used to build a testing mix network.
     given the sphinx params and a node_factory i will return
@@ -106,18 +112,18 @@ def build_mixnet_nodes(params, node_factory, rand_reader):
     nodes = {}
     addr_to_nodes = {}
     for i in range(mix_size):
+        addr = i
         public_key, private_key = generate_node_keypair(rand_reader)
         node_id, name = generate_node_id_name(16, rand_reader)
         replay_cache = PacketReplayCacheDict()
-        node_state = SphinxNodeState(node_id, name, public_key, private_key, replay_cache)
-        addr = i
         dummy_node_transport = DummyTransport()
-        node_protocol = node_factory.buildProtocol(FakeMixProtocol(), node_state, dummy_node_transport, addr)
+        replay_cache = PacketReplayCacheDict()
+        key_state = SphinxNodeKeyState(private_key)
+        node_protocol = node_factory.buildProtocol(FakeMixProtocol(), replay_cache, key_state, dummy_node_transport, addr)
         nodes[node_id] = node_protocol
-        node_descriptor = NodeDescriptor(node_id, public_key, "dummy", addr)
-        consensus[node_descriptor.id] = node_descriptor
+        pki.set(node_id, public_key, addr)
         addr_to_nodes[addr] = node_protocol
-    return nodes, consensus, addr_to_nodes
+    return nodes, addr_to_nodes
 
 def generate_route(params, pki, destination):
     """
@@ -125,7 +131,7 @@ def generate_route(params, pki, destination):
     route is returned: a list of mix node IDs
     where the last element is the destination
     """
-    return rand_subset(pki.get_consensus().keys(), params.max_hops-1) + [destination]
+    return rand_subset(pki.identities(), params.max_hops-1) + [destination]
 
 
 class EchoClientProtocol(object):
@@ -186,19 +192,17 @@ class FakeMixProtocol(object):
         pass
 
 def test_NodeProtocol():
-    pki = FakePKI(None, None)
+    pki = DummyPKI()
     node_factory = NodeFactory(pki)
     params = node_factory.params
     rand_reader = RandReader()
-    nodes, consensus, addr_to_nodes = build_mixnet_nodes(params, node_factory, rand_reader)
-    pki.set_consensus(consensus)
-
+    nodes, addr_to_nodes = build_mixnet_nodes(pki, params, node_factory, rand_reader)
     dummy_client_transport = DummyTransport()
     client_factory = ClientFactory(dummy_client_transport, pki, rand_reader)
     client_id = binascii.unhexlify("436c69656e74206564343564326264")
     client = client_factory.buildProtocol(EchoClientProtocol(), "fake_client_addr", client_id)
 
-    dest = pki.get_consensus().keys()[0]
+    dest = pki.identities()[0]
     route = generate_route(params, pki, dest)
     message = b"ping"
     client.send(route, message)
