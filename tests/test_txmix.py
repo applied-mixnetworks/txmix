@@ -3,7 +3,7 @@
 from zope.interface import implementer
 
 from sphinxmixcrypto import generate_node_keypair, generate_node_id_name
-from sphinxmixcrypto import rand_subset, SphinxNodeState
+from sphinxmixcrypto import rand_subset
 from sphinxmixcrypto import sphinx_packet_unwrap, SphinxPacket, generate_node_keypair, generate_node_id_name
 from sphinxmixcrypto.common import RandReader
 from sphinxmixcrypto import PacketReplayCacheDict

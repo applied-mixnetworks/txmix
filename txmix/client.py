@@ -37,14 +37,10 @@ class ClientProtocol(object):
     """
     def __init__(self, params, pki, client_id, rand_reader, transport):
         self.params = params
-        self.sphinx_client = SphinxClient(params, client_id, rand_reader = rand_reader)
+        self.sphinx_client = SphinxClient(params, client_id, rand_reader=rand_reader)
         self.rand_reader = rand_reader
         self.pki = pki
         self.transport = transport
-        consensus = self.pki.get_consensus()
-        self.node_key_map = {}
-        for node_id, node_desc in consensus.items():
-            self.node_key_map[node_id] = node_desc.public_key
 
     def message_received(self, message):
         # XXX fix me
@@ -54,6 +50,6 @@ class ClientProtocol(object):
 
     def send(self, route, message):
         first_hop_addr = self.pki.get_mix_addr(self.transport.name, route[0])
-        alpha, beta, gamma, delta = create_forward_message(self.params, route, self.node_key_map, route[-1], message, self.rand_reader)
+        alpha, beta, gamma, delta = create_forward_message(self.params, route, self.pki, route[-1], message, self.rand_reader)
         serialized_sphinx_packet = encode_sphinx_packet(alpha, beta, gamma, delta)
         self.transport.send(first_hop_addr, serialized_sphinx_packet)
