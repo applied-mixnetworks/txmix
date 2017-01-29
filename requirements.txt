@@ -1,3 +1,3 @@
--e https://github.com/applied-mixnetworks/sphinxmixcrypto.git@34febbc448a9126fcce15161e464475fdc30d296#egg=sphinxmixcrypto
+sphinxmixcrypto==0.0.1
 Twisted<=16.6.0
 zope.interface<=4.3.2
