@@ -31,8 +31,7 @@ class ClientProtocol(object):
     """
     I am a sphinx mix network client protocol which
     means I have a producer/consumer relationship with
-    a sphinx mix network client transport. My only responsibility
-    is to take care of encryption and serialization of messages.
+    a sphinx mix network client transport.
     """
     def __init__(self, params, pki, client_id, rand_reader, transport):
         self.params = params

@@ -6,6 +6,9 @@ from txmix.common import DEFAULT_CRYPTO_PARAMETERS, encode_sphinx_packet, decode
 
 
 class NodeFactory(object):
+    """
+    Factory class for creating mixes.
+    """
     def __init__(self, pki, params=None):
         self.pki = pki
         if params is None:
@@ -44,7 +47,6 @@ class NodeProtocol(object):
         to my attached protocol after deserializing and unwrapping
         """
         sphinx_packet = decode_sphinx_packet(self.params, message)
-        print("sphinx packet %s" % sphinx_packet)
         message_result = sphinx_packet_unwrap(self.params, self.replay_cache, self.key_state, sphinx_packet)
         self.protocol.messageResultReceived(message_result)
 
