@@ -1,1 +1,9 @@
-pytest>=3.0.3
+tox
+coverage
+setuptools>=0.8.0
+coveralls
+codecov
+wheel
+pyflakes
+pep8
+pytest
