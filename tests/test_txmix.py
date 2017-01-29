@@ -5,11 +5,10 @@ from zope.interface import implementer
 
 from sphinxmixcrypto import generate_node_keypair, generate_node_id_name
 from sphinxmixcrypto import rand_subset
-from sphinxmixcrypto import sphinx_packet_unwrap, SphinxPacket, generate_node_keypair, generate_node_id_name
 from sphinxmixcrypto.common import RandReader
 from sphinxmixcrypto import PacketReplayCacheDict, IMixPrivateKey, IMixPKI
 
-from txmix import NodeDescriptor, IMixTransport, ClientFactory
+from txmix import IMixTransport, ClientFactory
 from txmix import NodeFactory
 
 import binascii
@@ -108,7 +107,6 @@ def build_mixnet_nodes(pki, params, node_factory, rand_reader):
     and a dictionary of addr -> node protocol
     """
     mix_size = 40
-    consensus = {}
     nodes = {}
     addr_to_nodes = {}
     for i in range(mix_size):
@@ -125,13 +123,14 @@ def build_mixnet_nodes(pki, params, node_factory, rand_reader):
         addr_to_nodes[addr] = node_protocol
     return nodes, addr_to_nodes
 
+
 def generate_route(params, pki, destination):
     """
     given a destination node ID a randomly chosen
     route is returned: a list of mix node IDs
     where the last element is the destination
     """
-    return rand_subset(pki.identities(), params.max_hops-1) + [destination]
+    return rand_subset(pki.identities(), params.max_hops - 1) + [destination]
 
 
 class EchoClientProtocol(object):
@@ -143,9 +142,10 @@ class EchoClientProtocol(object):
             print("ping received")
             return
         print("non-ping received")
-        # XXX send a reply ping
-        #outgoing_message = {'message':'ping'}
-        #self.transport.send(message['surb'], outgoing_message)
+        #  XXX send a reply ping
+        #  outgoing_message = {'message':'ping'}
+        #  self.transport.send(message['surb'], outgoing_message)
+
 
 class FakeMixProtocol(object):
     sent_mix = []
@@ -188,8 +188,10 @@ class FakeMixProtocol(object):
             assert messageResult.tuple_client_hop
             nym_id, message = messageResult.tuple_client_hop
             self.send_to_nymserver(nym_id, message)
+
     def messageSend(self, destination, message):
         pass
+
 
 def test_NodeProtocol():
     pki = DummyPKI()

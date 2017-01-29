@@ -15,7 +15,7 @@ setup(
     version='0.0.1',
     description=description,
     long_description=open('README.rst', 'r').read(),
-    keywords=['python','mixnet', 'cryptography', 'anonymity'],
+    keywords=['python', 'mixnet', 'cryptography', 'anonymity'],
     install_requires=open('requirements.txt').readlines(),
     # "pip install -e .[dev]" will install development requirements
     extras_require=dict(

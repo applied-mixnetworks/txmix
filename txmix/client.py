@@ -1,8 +1,7 @@
 
 from __future__ import print_function
 
-import binascii
-from sphinxmixcrypto import rand_subset, SphinxClient, create_forward_message
+from sphinxmixcrypto import SphinxClient, create_forward_message
 from txmix.common import DEFAULT_CRYPTO_PARAMETERS, encode_sphinx_packet
 
 
@@ -42,9 +41,7 @@ class ClientProtocol(object):
         self.pki = pki
         self.transport = transport
 
-    def message_received(self, message):
-        # XXX fix me
-        #nym_id, delta = self.encoding.deserialize(message)
+    def message_received(self, nym_id, delta):
         unwrapped_message = self.sphinx_client.decrypt(nym_id, delta)
         self.protocol.messageReceived(unwrapped_message)
 

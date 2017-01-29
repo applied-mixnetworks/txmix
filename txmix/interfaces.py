@@ -39,7 +39,8 @@ class IEncodingHandler(Interface):
         """
         deserialize a message and return the result
         """
-    
+
+
 class INymClient(Interface):
 
     def create_nym():

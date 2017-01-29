@@ -3,7 +3,6 @@ from __future__ import print_function
 
 from sphinxmixcrypto import sphinx_packet_unwrap
 from txmix.common import DEFAULT_CRYPTO_PARAMETERS, encode_sphinx_packet, decode_sphinx_packet
-from txmix.common import encode_sphinx_packet
 
 
 class NodeFactory(object):

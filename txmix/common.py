@@ -15,14 +15,16 @@ class NodeDescriptor(object):
         self.transport_name = transport_name
         self.addr = addr
 
+
 def decode_sphinx_packet(params, packet):
     alpha, beta, gamma, delta = params.get_dimensions()
     _alpha = packet[:alpha]
-    _beta  = packet[alpha:alpha+beta]
-    _gamma = packet[alpha+beta:alpha+beta+gamma]
-    _delta = packet[alpha+beta+gamma:]
+    _beta = packet[alpha:alpha + beta]
+    _gamma = packet[alpha + beta:alpha + beta + gamma]
+    _delta = packet[alpha + beta + gamma:]
     sphinx_packet = SphinxPacket(_alpha, _beta, _gamma, _delta)
     return sphinx_packet
+
 
 def encode_sphinx_packet(alpha, beta, gamma, delta):
     return alpha + beta + gamma + delta
