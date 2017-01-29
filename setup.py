@@ -19,7 +19,7 @@ setup(
     install_requires=open('requirements.txt').readlines(),
     # "pip install -e .[dev]" will install development requirements
     extras_require=dict(
-        dev=open('dev-requirements.txt').readlines(),
+        dev=open('requirements-dev.txt').readlines(),
     ),
     classifiers=[
         'Intended Audience :: Developers',

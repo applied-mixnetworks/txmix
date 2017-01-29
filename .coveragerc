@@ -1,0 +1,20 @@
+[run]
+branch = True
+source = txmix
+parallel = True
+
+[paths]
+source=
+   txmix
+   .tox/*/lib/python*/site-packages/txmix
+   .tox/*/lib/site-packages/txmix
+   .tox/pypy*/site-packages/txmix
+
+[report]
+precision = 2
+exclude_lines =
+    def __repr__
+    raise AssertionError
+    pragma: no cover
+    if self\._debug
+    raise NotImplementedError
