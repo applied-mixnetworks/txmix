@@ -1,8 +1,22 @@
 
 from __future__ import print_function
 
+import os
+
 from sphinxmixcrypto import SphinxClient, create_forward_message
-from txmix.common import DEFAULT_CRYPTO_PARAMETERS, encode_sphinx_packet
+from txmix.common import DEFAULT_CRYPTO_PARAMETERS, sphinx_packet_encode
+
+
+def rand_subset(lst, nu):
+    """
+    Return a list of nu random elements of the given list (without
+    replacement).
+    """
+    # Randomize the order of the list by sorting on a random key
+    nodeids = [(os.urandom(8), x) for x in lst]
+    nodeids.sort(key=lambda x: x[0])
+    # Return the first nu elements of the randomized list
+    return [x[1] for x in nodeids[:nu]]
 
 
 class ClientFactory(object):

@@ -1,8 +1,8 @@
 
 from __future__ import print_function
 
-from sphinxmixcrypto import sphinx_packet_unwrap
-from txmix.common import DEFAULT_CRYPTO_PARAMETERS, encode_sphinx_packet, decode_sphinx_packet
+from sphinxmixcrypto import sphinx_packet_unwrap, GroupCurve25519
+from txmix.common import DEFAULT_CRYPTO_PARAMETERS, sphinx_packet_encode, sphinx_packet_decode
 
 
 class NodeFactory(object):
@@ -16,18 +16,16 @@ class NodeFactory(object):
         else:
             self.params = params
 
-    def buildProtocol(self, protocol, replay_cache, key_state, transport, addr):
+    def build_protocol(self, replay_cache, key_state, transport, addr):
         node_protocol = NodeProtocol(replay_cache, key_state, self.params, self.pki, transport)
-        node_protocol.set_protocol(protocol)
-        protocol.setTransport(node_protocol)
         transport.start(addr, node_protocol)
         return node_protocol
 
 
 class NodeProtocol(object):
     """
-    i am a mix net node protocol responsible for encryption
-    and serialization of mix messages.
+    i am a mix net node protocol responsible for decryption
+    and mixing.
     """
 
     def __init__(self, replay_cache, key_state, params, pki, transport):
@@ -36,27 +34,55 @@ class NodeProtocol(object):
         self.params = params
         self.pki = pki
         self.transport = transport
-        self.protocol = None
 
-    def set_protocol(self, application_protocol):
-        self.protocol = application_protocol
+    def make_connection(self, transport):
+        self.transport = transport
 
-    def message_received(self, message):
+    def sphinx_packet_received(self, raw_sphinx_packet):
         """
-        i receive messages and proxy them
-        to my attached protocol after deserializing and unwrapping
+        i receive a raw_packet, decode it and unwrap/decrypt it
+        and return the results
         """
-        sphinx_packet = decode_sphinx_packet(self.params, message)
-        message_result = sphinx_packet_unwrap(self.params, self.replay_cache, self.key_state, sphinx_packet)
-        self.protocol.messageResultReceived(message_result)
+        sphinx_packet = sphinx_packet_decode(self.params, raw_sphinx_packet)
+        return sphinx_packet_unwrap(self.params, self.replay_cache, self.key_state, sphinx_packet)
 
-    def send_to_mix(self, destination, message):
-        serialized_message = encode_sphinx_packet(message['alpha'], message['beta'], message['gamma'], message['delta'])
-        addr = self.pki.get_mix_addr(self.transport.name, destination)
-        self.transport.send(addr, serialized_message)
+    def sphinx_packet_send(self, mix_id, sphinx_packet):
+        """
+        given a SphinxPacket object I shall encode it into
+        a raw packet and send it to the mix with mix_id
+        """
+        raw_sphinx_packet = sphinx_packet_encode(
+            sphinx_packet['alpha'],
+            sphinx_packet['beta'],
+            sphinx_packet['gamma'],
+            sphinx_packet['delta'])
+        addr = self.pki.get_mix_addr(self.transport.name, mix_id)
+        self.transport.send(addr, raw_sphinx_packet)
 
-    def send_to_nymserver(self, nym_id, message):
-        pass
 
-    def send_to_client(self, client_id, message_id, message):
-        pass
+class ThresholdMix(object):
+
+    def process_unwrapped_message(self, message_result):
+        if message_result.tuple_next_hop:
+            nextHop, header, delta = message_result.tuple_next_hop
+            alpha, beta, gamma = header
+            sphinx_message = {
+                "alpha": alpha,
+                "beta": beta,
+                "gamma": gamma,
+                "delta": delta,
+            }
+            #  self.send_to_mix(nextHop, sphinx_message)
+        elif message_result.tuple_exit_hop:
+            destination, message = message_result.tuple_exit_hop
+            sphinx_message = {
+                "alpha": None,
+                "beta": None,
+                "gamma": None,
+                "delta": message,
+            }
+            #  self.send_to_exit_mix(destination, sphinx_message)
+        else:
+            #  XXX
+            pass
+

@@ -16,7 +16,7 @@ class NodeDescriptor(object):
         self.addr = addr
 
 
-def decode_sphinx_packet(params, packet):
+def sphinx_packet_decode(params, packet):
     alpha, beta, gamma, delta = params.get_dimensions()
     _alpha = packet[:alpha]
     _beta = packet[alpha:alpha + beta]
@@ -26,5 +26,5 @@ def decode_sphinx_packet(params, packet):
     return sphinx_packet
 
 
-def encode_sphinx_packet(alpha, beta, gamma, delta):
+def sphinx_packet_encode(alpha, beta, gamma, delta):
     return alpha + beta + gamma + delta
