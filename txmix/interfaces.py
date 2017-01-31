@@ -12,14 +12,14 @@ class IMixTransport(Interface):
 
     name = Attribute("""name of transport handler""")
 
-    def start(addr, protocol):
+    def register_protocol(protocol):
         """
-        start the transport
+        register the protocol
         """
 
-    def received(message):
+    def start():
         """
-        This function is called when a message is received from the mix network.
+        start the transport
         """
 
     def send(addr, message):

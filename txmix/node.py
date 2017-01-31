@@ -1,41 +1,47 @@
 
 from __future__ import print_function
 
-from sphinxmixcrypto import sphinx_packet_unwrap, GroupCurve25519
+import attr
+import types
+from zope.interface.declarations import implementer
+
+from sphinxmixcrypto import sphinx_packet_unwrap, GroupCurve25519, SphinxParams
+from sphinxmixcrypto.common import IPacketReplayCache, IMixPrivateKey, IMixPKI
+
 from txmix.common import DEFAULT_CRYPTO_PARAMETERS, sphinx_packet_encode, sphinx_packet_decode
+from txmix.interfaces import IMixTransport
 
 
+@attr.s(frozen=True)
 class NodeFactory(object):
     """
     Factory class for creating mixes.
     """
-    def __init__(self, pki, params=None):
-        self.pki = pki
-        if params is None:
-            self.params = DEFAULT_CRYPTO_PARAMETERS
-        else:
-            self.params = params
+    pki = attr.ib(validator=attr.validators.provides(IMixPKI))
+    params = attr.ib(default=DEFAULT_CRYPTO_PARAMETERS, validator=attr.validators.instance_of(SphinxParams))
 
     def build_protocol(self, replay_cache, key_state, transport, addr):
-        node_protocol = NodeProtocol(replay_cache, key_state, self.params, self.pki, transport)
-        transport.start(addr, node_protocol)
+        node_protocol = NodeProtocol(replay_cache, key_state, self.params, self.pki)
+        node_protocol.make_connection(transport)
         return node_protocol
 
 
+@attr.s
 class NodeProtocol(object):
     """
-    i am a mix net node protocol responsible for decryption
-    and mixing.
+    i am a mix net node protocol responsible for decryption and
+    message passing to my mix helper class.
     """
 
-    def __init__(self, replay_cache, key_state, params, pki, transport):
-        self.replay_cache = replay_cache
-        self.key_state = key_state
-        self.params = params
-        self.pki = pki
-        self.transport = transport
+    replay_cache = attr.ib(validator=attr.validators.provides(IPacketReplayCache))
+    key_state = attr.ib(validator=attr.validators.provides(IMixPrivateKey))
+    params = attr.ib(validator=attr.validators.instance_of(SphinxParams))
+    pki = attr.ib(validator=attr.validators.provides(IMixPKI))
+    packet_receive_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
 
     def make_connection(self, transport):
+        transport.register_protocol(self)
+        transport.start()
         self.transport = transport
 
     def sphinx_packet_received(self, raw_sphinx_packet):
@@ -44,7 +50,8 @@ class NodeProtocol(object):
         and return the results
         """
         sphinx_packet = sphinx_packet_decode(self.params, raw_sphinx_packet)
-        return sphinx_packet_unwrap(self.params, self.replay_cache, self.key_state, sphinx_packet)
+        unwrapped_packet = sphinx_packet_unwrap(self.params, self.replay_cache, self.key_state, sphinx_packet)
+        self.packet_receive_handler(unwrapped_packet)
 
     def sphinx_packet_send(self, mix_id, sphinx_packet):
         """
@@ -56,33 +63,37 @@ class NodeProtocol(object):
             sphinx_packet['beta'],
             sphinx_packet['gamma'],
             sphinx_packet['delta'])
+
         addr = self.pki.get_mix_addr(self.transport.name, mix_id)
         self.transport.send(addr, raw_sphinx_packet)
 
 
-class ThresholdMix(object):
+def is_16bytes(instance, attribute, value):
+    if not isinstance(value, bytes) or len(value) != 16:
+        raise ValueError("must be 16 byte value")
 
-    def process_unwrapped_message(self, message_result):
-        if message_result.tuple_next_hop:
-            nextHop, header, delta = message_result.tuple_next_hop
-            alpha, beta, gamma = header
-            sphinx_message = {
-                "alpha": alpha,
-                "beta": beta,
-                "gamma": gamma,
-                "delta": delta,
-            }
-            #  self.send_to_mix(nextHop, sphinx_message)
-        elif message_result.tuple_exit_hop:
-            destination, message = message_result.tuple_exit_hop
-            sphinx_message = {
-                "alpha": None,
-                "beta": None,
-                "gamma": None,
-                "delta": message,
-            }
-            #  self.send_to_exit_mix(destination, sphinx_message)
-        else:
-            #  XXX
-            pass
 
+@attr.s
+class ThreshMixNode(object):
+    """
+    i am a thresh mix node
+    """
+
+    node_id = attr.ib(validator=is_16bytes)
+    replay_cache = attr.ib(validator=attr.validators.provides(IPacketReplayCache))
+    key_state = attr.ib(validator=attr.validators.provides(IMixPrivateKey))
+    params = attr.ib(validator=attr.validators.instance_of(SphinxParams))
+    pki = attr.ib(validator=attr.validators.provides(IMixPKI))
+    transport = attr.ib(validator=attr.validators.provides(IMixTransport))
+
+    def start(self):
+        self.protocol = NodeProtocol(self.replay_cache,
+                                     self.key_state,
+                                     self.params,
+                                     self.pki,
+                                     packet_receive_handler=lambda x: self.packet_received(x))
+        self.protocol.make_connection(self.transport)
+        self.pki.set(self.node_id, self.key_state.get_private_key(), self.protocol.transport.addr)
+
+    def packet_received(self, unwrapped_packet):
+        print("unwrapped_packet: %s" % unwrapped_packet) # XXX

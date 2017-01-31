@@ -1,30 +1,34 @@
 
 from __future__ import print_function
 
+import attr
 from zope.interface import implementer
+from twisted.internet.interfaces import IReactorUDP
 from twisted.internet.protocol import DatagramProtocol
 
 from txmix import IMixTransport
 
 
 @implementer(IMixTransport)
-class UDPTransport(DatagramProtocol):
+@attr.s()
+class UDPTransport(DatagramProtocol, object):
     """
     implements the IMixTransport interface
     """
     name = "udp"
+    reactor = attr.ib(validator=attr.validators.provides(IReactorUDP))
+    addr = attr.ib(validator=attr.validators.instance_of(tuple))
 
-    def __init__(self, reactor):
-        self.reactor = reactor
-        self.received_callback = None
+    def register_protocol(self, protocol):
+        # XXX todo: assert that protocol provides the appropriate interface
+        self.protocol = protocol
 
-    def start(self, addr, nodeProtocol):
+    def start(self):
         """
         make this transport begin listening on the specified interface and UDP port
         interface must be an IP address
         """
-        self.received_callback = nodeProtocol.messageReceived
-        interface, port = addr
+        interface, port = self.addr
         self.reactor.listenUDP(port, self, interface=interface)
 
     def send(self, addr, message):
@@ -34,8 +38,8 @@ class UDPTransport(DatagramProtocol):
         """
         self.transport.write(message, addr)
 
-    def received(self, message):
+    def datagramReceived(self, datagram, addr):
         """
         i am called by the twisted reactor when our transport receives a UDP packet
         """
-        self.received_callback(message)
+        self.protocol.sphinx_packet_received(datagram)

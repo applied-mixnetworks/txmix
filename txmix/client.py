@@ -2,21 +2,11 @@
 from __future__ import print_function
 
 import os
+import binascii
 
 from sphinxmixcrypto import SphinxClient, create_forward_message
 from txmix.common import DEFAULT_CRYPTO_PARAMETERS, sphinx_packet_encode
 
-
-def rand_subset(lst, nu):
-    """
-    Return a list of nu random elements of the given list (without
-    replacement).
-    """
-    # Randomize the order of the list by sorting on a random key
-    nodeids = [(os.urandom(8), x) for x in lst]
-    nodeids.sort(key=lambda x: x[0])
-    # Return the first nu elements of the randomized list
-    return [x[1] for x in nodeids[:nu]]
 
 
 class ClientFactory(object):
@@ -34,10 +24,10 @@ class ClientFactory(object):
         else:
             self.params = params
 
-    def buildProtocol(self, protocol, addr, client_id):
+    def buildProtocol(self, protocol, client_id):
         client_protocol = ClientProtocol(self.params, self.pki, client_id, self.rand_reader, self.transport)
         protocol.setTransport(self.transport)
-        self.transport.start(addr, client_protocol)
+        self.transport.start()
         return client_protocol
 
 
@@ -59,7 +49,9 @@ class ClientProtocol(object):
         self.protocol.messageReceived(unwrapped_message)
 
     def send(self, route, message):
+        print("first hop id %s" % binascii.hexlify(route[0]))
         first_hop_addr = self.pki.get_mix_addr(self.transport.name, route[0])
+        print("first hop addr %s" % first_hop_addr)
         alpha, beta, gamma, delta = create_forward_message(self.params, route, self.pki, route[-1], message, self.rand_reader)
-        serialized_sphinx_packet = encode_sphinx_packet(alpha, beta, gamma, delta)
+        serialized_sphinx_packet = sphinx_packet_encode(alpha, beta, gamma, delta)
         self.transport.send(first_hop_addr, serialized_sphinx_packet)
