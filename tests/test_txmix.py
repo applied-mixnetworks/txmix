@@ -1,24 +1,21 @@
 # -*- coding: utf-8 -*-
 
 import os
-import zope.interface
 from zope.interface import implementer
 import binascii
 
 from sphinxmixcrypto.common import RandReader
-from sphinxmixcrypto import PacketReplayCacheDict, IKeyState, IMixPKI, GroupCurve25519, SphinxParams, SECURITY_PARAMETER, sphinx_packet_unwrap
-from sphinxmixcrypto import create_forward_message
+from sphinxmixcrypto import PacketReplayCacheDict, IKeyState, IMixPKI, GroupCurve25519, SphinxParams, SECURITY_PARAMETER
 
 from txmix import IMixTransport, ClientFactory
 from txmix.node import NodeFactory, ThreshMixNode
-from txmix.common import sphinx_packet_decode, sphinx_packet_encode
-
 
 
 def generate_node_id(rand_reader):
     idnum = rand_reader.read(4)
     node_id = b"\xff" + idnum + (b"\x00" * (SECURITY_PARAMETER - len(idnum) - 1))
     return node_id
+
 
 def generate_node_keypair(rand_reader):
     group = GroupCurve25519()
@@ -123,7 +120,7 @@ def build_mixnet_nodes(pki, params, node_factory, rand_reader):
         public_key, private_key = generate_node_keypair(rand_reader)
         replay_cache = PacketReplayCacheDict()
         key_state = SphinxNodeKeyState(public_key, private_key)
-        params = SphinxParams(5, 1024) # 5 hops max and payload 1024 bytes
+        params = SphinxParams(5, 1024)  # 5 hops max and payload 1024 bytes
         transport = DummyTransport(i)
         node_id = generate_node_id(rand_reader)
         mix = ThreshMixNode(node_id, replay_cache, key_state, params, pki, transport)
@@ -132,6 +129,7 @@ def build_mixnet_nodes(pki, params, node_factory, rand_reader):
         addr_to_nodes[addr] = mix
     route = nodes.keys()[:5]
     return nodes, addr_to_nodes, route
+
 
 def rand_subset(lst, nu):
     """
@@ -143,6 +141,7 @@ def rand_subset(lst, nu):
     nodeids.sort(key=lambda x: x[0])
     # Return the first nu elements of the randomized list
     return [x[1] for x in nodeids[:nu]]
+
 
 def generate_route(params, pki, destination):
     """
@@ -229,9 +228,7 @@ def test_NodeProtocol():
     client = client_factory.buildProtocol(EchoClientProtocol(), client_id)
 
     message = b"ping"
-    first_hop_addr = pki.get_mix_addr("dummy", route[0])
+    # first_hop_addr = pki.get_mix_addr("dummy", route[0])
     client.send(route, message)
     destination, raw_sphinx_packet = dummy_client_transport.sent.pop()
-
-    sphinx_packet = sphinx_packet_decode(params, raw_sphinx_packet)
     nodes[route[0]].protocol.sphinx_packet_received(raw_sphinx_packet)

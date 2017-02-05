@@ -2,13 +2,14 @@
 from twisted.internet import reactor
 from zope.interface.declarations import implementer
 
-from sphinxmixcrypto import IPacketReplayCache, IMixPrivateKey, IMixPKI, GroupCurve25519
+from sphinxmixcrypto import IMixPKI, GroupCurve25519, IKeyState
 from sphinxmixcrypto import PacketReplayCacheDict, SphinxParams, RandReader
 
 from txmix.transports import UDPTransport
 from txmix.node import ThreshMixNode
 
-@implementer(IMixPrivateKey)
+
+@implementer(IKeyState)
 class SphinxNodeKeyState:
 
     def __init__(self, private_key):
@@ -56,7 +57,7 @@ def main():
 
     replay_cache = PacketReplayCacheDict()
     key_state = SphinxNodeKeyState(private_key)
-    params = SphinxParams(5, 1024) # 5 hops max and payload 1024 bytes
+    params = SphinxParams(5, 1024)  # 5 hops max and payload 1024 bytes
     pki = DummyPKI()
 
     # interface and port to listen on for UDP packets
@@ -65,6 +66,7 @@ def main():
     mix = ThreshMixNode(replay_cache, key_state, params, pki, transport)
     mix.start()
     reactor.run()
+
 
 if __name__ == '__main__':
     main()

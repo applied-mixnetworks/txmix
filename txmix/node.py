@@ -1,10 +1,8 @@
 
-import binascii
 import attr
 import types
-from zope.interface.declarations import implementer
 
-from sphinxmixcrypto import sphinx_packet_unwrap, GroupCurve25519, SphinxParams
+from sphinxmixcrypto import sphinx_packet_unwrap, SphinxParams
 from sphinxmixcrypto.common import IPacketReplayCache, IKeyState, IMixPKI
 
 from txmix.common import DEFAULT_CRYPTO_PARAMETERS, sphinx_packet_encode, sphinx_packet_decode
@@ -95,5 +93,4 @@ class ThreshMixNode(object):
         self.pki.set(self.node_id, self.key_state.get_public_key(), self.protocol.transport.addr)
 
     def packet_received(self, unwrapped_packet):
-        #print("unwrapped_packet: %s" % unwrapped_packet) # XXX
         pass

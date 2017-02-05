@@ -1,12 +1,6 @@
 
-from __future__ import print_function
-
-import os
-import binascii
-
 from sphinxmixcrypto import SphinxClient, create_forward_message
 from txmix.common import DEFAULT_CRYPTO_PARAMETERS, sphinx_packet_encode
-
 
 
 class ClientFactory(object):
