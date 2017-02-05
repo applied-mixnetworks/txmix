@@ -26,5 +26,10 @@ def sphinx_packet_decode(params, packet):
     return sphinx_packet
 
 
-def sphinx_packet_encode(alpha, beta, gamma, delta):
+def sphinx_packet_encode(params, alpha, beta, gamma, delta):
+    alpha_len, beta_len, gamma_len, delta_len = params.get_dimensions()
+    assert alpha_len == len(alpha)
+    assert beta_len == len(beta)
+    assert gamma_len == len(gamma)
+    assert delta_len == len(delta)
     return alpha + beta + gamma + delta

@@ -49,9 +49,7 @@ class ClientProtocol(object):
         self.protocol.messageReceived(unwrapped_message)
 
     def send(self, route, message):
-        print("first hop id %s" % binascii.hexlify(route[0]))
         first_hop_addr = self.pki.get_mix_addr(self.transport.name, route[0])
-        print("first hop addr %s" % first_hop_addr)
         alpha, beta, gamma, delta = create_forward_message(self.params, route, self.pki, route[-1], message, self.rand_reader)
-        serialized_sphinx_packet = sphinx_packet_encode(alpha, beta, gamma, delta)
+        serialized_sphinx_packet = sphinx_packet_encode(self.params, alpha, beta, gamma, delta)
         self.transport.send(first_hop_addr, serialized_sphinx_packet)

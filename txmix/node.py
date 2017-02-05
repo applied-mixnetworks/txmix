@@ -1,12 +1,11 @@
 
-from __future__ import print_function
-
+import binascii
 import attr
 import types
 from zope.interface.declarations import implementer
 
 from sphinxmixcrypto import sphinx_packet_unwrap, GroupCurve25519, SphinxParams
-from sphinxmixcrypto.common import IPacketReplayCache, IMixPrivateKey, IMixPKI
+from sphinxmixcrypto.common import IPacketReplayCache, IKeyState, IMixPKI
 
 from txmix.common import DEFAULT_CRYPTO_PARAMETERS, sphinx_packet_encode, sphinx_packet_decode
 from txmix.interfaces import IMixTransport
@@ -34,7 +33,7 @@ class NodeProtocol(object):
     """
 
     replay_cache = attr.ib(validator=attr.validators.provides(IPacketReplayCache))
-    key_state = attr.ib(validator=attr.validators.provides(IMixPrivateKey))
+    key_state = attr.ib(validator=attr.validators.provides(IKeyState))
     params = attr.ib(validator=attr.validators.instance_of(SphinxParams))
     pki = attr.ib(validator=attr.validators.provides(IMixPKI))
     packet_receive_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
@@ -81,7 +80,7 @@ class ThreshMixNode(object):
 
     node_id = attr.ib(validator=is_16bytes)
     replay_cache = attr.ib(validator=attr.validators.provides(IPacketReplayCache))
-    key_state = attr.ib(validator=attr.validators.provides(IMixPrivateKey))
+    key_state = attr.ib(validator=attr.validators.provides(IKeyState))
     params = attr.ib(validator=attr.validators.instance_of(SphinxParams))
     pki = attr.ib(validator=attr.validators.provides(IMixPKI))
     transport = attr.ib(validator=attr.validators.provides(IMixTransport))
@@ -93,7 +92,8 @@ class ThreshMixNode(object):
                                      self.pki,
                                      packet_receive_handler=lambda x: self.packet_received(x))
         self.protocol.make_connection(self.transport)
-        self.pki.set(self.node_id, self.key_state.get_private_key(), self.protocol.transport.addr)
+        self.pki.set(self.node_id, self.key_state.get_public_key(), self.protocol.transport.addr)
 
     def packet_received(self, unwrapped_packet):
-        print("unwrapped_packet: %s" % unwrapped_packet) # XXX
+        #print("unwrapped_packet: %s" % unwrapped_packet) # XXX
+        pass
