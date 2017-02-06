@@ -1,14 +1,26 @@
 # -*- coding: utf-8 -*-
 
 import os
+import attr
 from zope.interface import implementer
+import zope
 import binascii
 
-from sphinxmixcrypto.common import RandReader
-from sphinxmixcrypto import PacketReplayCacheDict, IKeyState, IMixPKI, GroupCurve25519, SphinxParams, SECURITY_PARAMETER
+from sphinxmixcrypto import PacketReplayCacheDict, GroupCurve25519, SphinxParams, SECURITY_PARAMETER
+from sphinxmixcrypto import IReader, IKeyState, IMixPKI
 
 from txmix import IMixTransport, ClientFactory
 from txmix.node import NodeFactory, ThresholdMixNode
+
+
+
+@zope.interface.implementer(IReader)
+class RandReader:
+    def __init__(self):
+        pass
+
+    def read(self, n):
+        return os.urandom(n)
 
 
 def generate_node_id(rand_reader):
@@ -37,7 +49,7 @@ class SphinxNodeKeyState:
     def get_public_key(self):
         return self.public_key
 
-
+@zope.interface.implementer(IReader)
 class FixedNoiseReader():
 
     def __init__(self, hexed_noise):
@@ -80,28 +92,28 @@ class DummyTransport(object):
         self.sent.append((addr, message))
 
 
-@implementer(IMixPKI)
+@zope.interface.implementer(IMixPKI)
 class DummyPKI(object):
 
     def __init__(self):
         self.node_map = {}
         self.addr_map = {}
 
-    def set(self, key_id, pub_key, addr):
-        assert key_id not in self.node_map.keys()
-        self.node_map[key_id] = pub_key
-        self.addr_map[key_id] = addr
+    def set(self, node_id, pub_key, addr):
+        assert node_id not in self.node_map.keys()
+        self.node_map[node_id] = pub_key
+        self.addr_map[node_id] = addr
 
-    def get(self, key_id):
-        return self.node_map[key_id]
+    def get(self, node_id):
+        return self.node_map[node_id]
 
     def identities(self):
         return self.node_map.keys()
 
-    def get_mix_addr(self, transport_name, key_id):
-        return self.addr_map[key_id]
+    def get_mix_addr(self, transport_name, node_id):
+        return self.addr_map[node_id]
 
-    def rotate(self, key_id, new_key_id, new_pub_key, signature):
+    def rotate(self, node_id, new_pub_key, signature):
         pass
 
 
@@ -224,9 +236,9 @@ def test_NodeProtocol():
     nodes, addr_to_nodes, route = build_mixnet_nodes(pki, params, node_factory, rand_reader)
 
     dummy_client_transport = DummyTransport(99)
-    client_factory = ClientFactory(dummy_client_transport, pki, rand_reader)
-    client_id = binascii.unhexlify("436c69656e74206564343564326264")
-    client = client_factory.buildProtocol(EchoClientProtocol(), client_id)
+    client_factory = ClientFactory(pki, rand_reader, params)
+    client_id = "Client 555"
+    client = client_factory.build_protocol(client_id, dummy_client_transport)
 
     message = b"ping"
     # first_hop_addr = pki.get_mix_addr("dummy", route[0])

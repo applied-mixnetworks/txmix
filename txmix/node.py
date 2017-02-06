@@ -7,7 +7,7 @@ from twisted.internet.interfaces import IReactorCore
 from twisted.internet import reactor
 
 from sphinxmixcrypto import sphinx_packet_unwrap, SphinxParams
-from sphinxmixcrypto.common import IPacketReplayCache, IKeyState, IMixPKI
+from sphinxmixcrypto import IPacketReplayCache, IKeyState, IMixPKI, IReader
 from sphinxmixcrypto import sphinx_packet_encode, sphinx_packet_decode
 
 from txmix.common import DEFAULT_CRYPTO_PARAMETERS
@@ -108,9 +108,9 @@ class ThresholdMixNode(object):
                 released = self._batch
                 self._batch = []
                 random.shuffle(released)
-                delay = random.randint(0, self._max_delay)
+                delay = random.SystemRandom.randint(0, self._max_delay)
                 self.reactor.callLater(delay, self.batch_send, released)
 
-    def batch_send(self, drain):
-        for destination, message in drain:
+    def batch_send(self, batch):
+        for destination, message in batch:
             self.protocol.sphinx_packet_send(destination, message)

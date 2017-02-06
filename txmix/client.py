@@ -1,27 +1,25 @@
 
-from sphinxmixcrypto import SphinxClient, create_forward_message, sphinx_packet_encode
+import attr
+
+from sphinxmixcrypto import SphinxParams, SphinxClient, create_forward_message, sphinx_packet_encode
+from sphinxmixcrypto import IMixPKI, IReader
 from txmix.common import DEFAULT_CRYPTO_PARAMETERS
 
 
+@attr.s(frozen=True)
 class ClientFactory(object):
     """
     Factory class for creating mix clients
     with parameterized transports, pki and sphinx crypto primitives
     """
-    def __init__(self, transport, pki, rand_reader, params=None):
-        self.transport = transport
-        self.rand_reader = rand_reader
-        self.pki = pki
 
-        if params is None:
-            self.params = DEFAULT_CRYPTO_PARAMETERS
-        else:
-            self.params = params
+    pki = attr.ib(validator=attr.validators.provides(IMixPKI))
+    rand_reader = attr.ib(validator=attr.validators.provides(IReader))
+    params = attr.ib(default=DEFAULT_CRYPTO_PARAMETERS, validator=attr.validators.instance_of(SphinxParams))
 
-    def buildProtocol(self, protocol, client_id):
-        client_protocol = ClientProtocol(self.params, self.pki, client_id, self.rand_reader, self.transport)
-        protocol.setTransport(self.transport)
-        self.transport.start()
+    def build_protocol(self, client_id, transport):
+        client_protocol = ClientProtocol(self.params, self.pki, client_id, self.rand_reader, transport)
+        transport.start()
         return client_protocol
 
 
@@ -33,7 +31,7 @@ class ClientProtocol(object):
     """
     def __init__(self, params, pki, client_id, rand_reader, transport):
         self.params = params
-        self.sphinx_client = SphinxClient(params, client_id, rand_reader=rand_reader)
+        self.sphinx_client = SphinxClient(params, client_id, rand_reader)
         self.rand_reader = rand_reader
         self.pki = pki
         self.transport = transport
