@@ -1,11 +1,16 @@
 
 import attr
 import types
+import random
+
+from twisted.internet.interfaces import IReactorCore
+from twisted.internet import reactor
 
 from sphinxmixcrypto import sphinx_packet_unwrap, SphinxParams
 from sphinxmixcrypto.common import IPacketReplayCache, IKeyState, IMixPKI
+from sphinxmixcrypto import sphinx_packet_encode, sphinx_packet_decode
 
-from txmix.common import DEFAULT_CRYPTO_PARAMETERS, sphinx_packet_encode, sphinx_packet_decode
+from txmix.common import DEFAULT_CRYPTO_PARAMETERS
 from txmix.interfaces import IMixTransport
 
 
@@ -71,17 +76,21 @@ def is_16bytes(instance, attribute, value):
 
 
 @attr.s
-class ThreshMixNode(object):
+class ThresholdMixNode(object):
     """
-    i am a thresh mix node
+    i am a threshold mix node
     """
 
+    threshold_count = attr.ib(validator=attr.validators.instance_of(int))
     node_id = attr.ib(validator=is_16bytes)
     replay_cache = attr.ib(validator=attr.validators.provides(IPacketReplayCache))
     key_state = attr.ib(validator=attr.validators.provides(IKeyState))
     params = attr.ib(validator=attr.validators.instance_of(SphinxParams))
     pki = attr.ib(validator=attr.validators.provides(IMixPKI))
     transport = attr.ib(validator=attr.validators.provides(IMixTransport))
+    reactor = attr.ib(validator=attr.validators.provides(IReactorCore), default=reactor)
+    _batch = attr.ib(init=False, default=[])  # list of 2-tuples [(destination, sphinx_packet)]
+    _max_delay = attr.ib(init=False, default=600)
 
     def start(self):
         self.protocol = NodeProtocol(self.replay_cache,
@@ -92,5 +101,16 @@ class ThreshMixNode(object):
         self.protocol.make_connection(self.transport)
         self.pki.set(self.node_id, self.key_state.get_public_key(), self.protocol.transport.addr)
 
-    def packet_received(self, unwrapped_packet):
-        pass
+    def packet_received(self, result):
+        if result.next_hop:
+            self._batch.append(result.next_hop)  # [(destination, sphinx_packet)]
+            if len(self._batch) >= self.threshold_count:
+                released = self._batch
+                self._batch = []
+                random.shuffle(released)
+                delay = random.randint(0, self._max_delay)
+                self.reactor.callLater(delay, self.batch_send, released)
+
+    def batch_send(self, drain):
+        for destination, message in drain:
+            self.protocol.sphinx_packet_send(destination, message)

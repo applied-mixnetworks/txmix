@@ -1,6 +1,6 @@
 
-from sphinxmixcrypto import SphinxClient, create_forward_message
-from txmix.common import DEFAULT_CRYPTO_PARAMETERS, sphinx_packet_encode
+from sphinxmixcrypto import SphinxClient, create_forward_message, sphinx_packet_encode
+from txmix.common import DEFAULT_CRYPTO_PARAMETERS
 
 
 class ClientFactory(object):

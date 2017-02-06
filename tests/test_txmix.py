@@ -8,7 +8,7 @@ from sphinxmixcrypto.common import RandReader
 from sphinxmixcrypto import PacketReplayCacheDict, IKeyState, IMixPKI, GroupCurve25519, SphinxParams, SECURITY_PARAMETER
 
 from txmix import IMixTransport, ClientFactory
-from txmix.node import NodeFactory, ThreshMixNode
+from txmix.node import NodeFactory, ThresholdMixNode
 
 
 def generate_node_id(rand_reader):
@@ -123,7 +123,8 @@ def build_mixnet_nodes(pki, params, node_factory, rand_reader):
         params = SphinxParams(5, 1024)  # 5 hops max and payload 1024 bytes
         transport = DummyTransport(i)
         node_id = generate_node_id(rand_reader)
-        mix = ThreshMixNode(node_id, replay_cache, key_state, params, pki, transport)
+        threshold_count = 100
+        mix = ThresholdMixNode(threshold_count, node_id, replay_cache, key_state, params, pki, transport)
         mix.start()
         nodes[node_id] = mix
         addr_to_nodes[addr] = mix
