@@ -4,8 +4,8 @@ import types
 
 from sphinxmixcrypto import SphinxParams, SphinxClient, create_forward_message, sphinx_packet_encode
 from sphinxmixcrypto import IMixPKI, IReader
-from txmix.common import DEFAULT_CRYPTO_PARAMETERS
-from txmix.interfaces import IMixTransport
+
+from txmix import IMixTransport
 
 
 @attr.s
@@ -27,11 +27,12 @@ class ClientProtocol(object):
         transport.register_protocol(self)
         transport.start()
         self.transport = transport
+        self.sphinx_client = SphinxClient(self.params, self.client_id, self.rand_reader)
 
     def received(self, packet):
         message_id = packet[:16]
         payload = packet[16:]
-        assert len(payload) == params.payload_size
+        assert len(payload) == self.params.payload_size
         self.message_received(message_id, payload)
 
     def message_received(self, message_id, ciphertext):

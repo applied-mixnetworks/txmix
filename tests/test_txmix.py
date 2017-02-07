@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
 
 import os
-import attr
-from zope.interface import implementer
 import binascii
+from zope.interface import implementer
 
 from sphinxmixcrypto import PacketReplayCacheDict, GroupCurve25519, SphinxParams, SECURITY_PARAMETER
 from sphinxmixcrypto import IReader, IKeyState, IMixPKI
 
 from txmix import IMixTransport
 from txmix import ThresholdMixNode, ClientProtocol
-
 
 
 @implementer(IReader)
@@ -47,6 +45,7 @@ class SphinxNodeKeyState:
 
     def get_public_key(self):
         return self.public_key
+
 
 @implementer(IReader)
 class FixedNoiseReader():
@@ -221,8 +220,10 @@ def test_NodeProtocol():
 
     dummy_client_transport = DummyTransport(99)
     client_id = "Client 555"
+
     def received(packet):
         print "received packet of len %s" % len(packet)
+
     client = ClientProtocol(params, pki, client_id, rand_reader, received)
     client.make_connection(dummy_client_transport)
     message = b"ping"

@@ -7,10 +7,9 @@ from twisted.internet.interfaces import IReactorCore
 from twisted.internet import reactor
 
 from sphinxmixcrypto import sphinx_packet_unwrap, SphinxParams
-from sphinxmixcrypto import IPacketReplayCache, IKeyState, IMixPKI, IReader
+from sphinxmixcrypto import IPacketReplayCache, IKeyState, IMixPKI
 from sphinxmixcrypto import sphinx_packet_encode, sphinx_packet_decode
 
-from txmix.common import DEFAULT_CRYPTO_PARAMETERS
 from txmix.interfaces import IMixTransport
 
 

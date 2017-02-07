@@ -1,7 +1,6 @@
 
 from twisted.internet import reactor
 
-from sphinxmixcrypto import IMixPKI, GroupCurve25519, IKeyState, SECURITY_PARAMETER
 from sphinxmixcrypto import PacketReplayCacheDict, SphinxParams
 
 from txmix.transports import UDPTransport
