@@ -42,4 +42,4 @@ class UDPTransport(DatagramProtocol, object):
         """
         i am called by the twisted reactor when our transport receives a UDP packet
         """
-        self.protocol.sphinx_packet_received(datagram)
+        self.protocol.received(datagram)

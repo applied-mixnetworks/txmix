@@ -14,20 +14,6 @@ from txmix.common import DEFAULT_CRYPTO_PARAMETERS
 from txmix.interfaces import IMixTransport
 
 
-@attr.s(frozen=True)
-class NodeFactory(object):
-    """
-    Factory class for creating mixes.
-    """
-    pki = attr.ib(validator=attr.validators.provides(IMixPKI))
-    params = attr.ib(default=DEFAULT_CRYPTO_PARAMETERS, validator=attr.validators.instance_of(SphinxParams))
-
-    def build_protocol(self, replay_cache, key_state, transport, addr):
-        node_protocol = NodeProtocol(replay_cache, key_state, self.params, self.pki)
-        node_protocol.make_connection(transport)
-        return node_protocol
-
-
 @attr.s
 class NodeProtocol(object):
     """
@@ -42,11 +28,12 @@ class NodeProtocol(object):
     packet_receive_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
 
     def make_connection(self, transport):
+        assert IMixTransport.providedBy(transport)
         transport.register_protocol(self)
         transport.start()
         self.transport = transport
 
-    def sphinx_packet_received(self, raw_sphinx_packet):
+    def received(self, raw_sphinx_packet):
         """
         i receive a raw_packet, decode it and unwrap/decrypt it
         and return the results

@@ -3,18 +3,17 @@
 import os
 import attr
 from zope.interface import implementer
-import zope
 import binascii
 
 from sphinxmixcrypto import PacketReplayCacheDict, GroupCurve25519, SphinxParams, SECURITY_PARAMETER
 from sphinxmixcrypto import IReader, IKeyState, IMixPKI
 
-from txmix import IMixTransport, ClientFactory
-from txmix.node import NodeFactory, ThresholdMixNode
+from txmix import IMixTransport
+from txmix import ThresholdMixNode, ClientProtocol
 
 
 
-@zope.interface.implementer(IReader)
+@implementer(IReader)
 class RandReader:
     def __init__(self):
         pass
@@ -49,7 +48,7 @@ class SphinxNodeKeyState:
     def get_public_key(self):
         return self.public_key
 
-@zope.interface.implementer(IReader)
+@implementer(IReader)
 class FixedNoiseReader():
 
     def __init__(self, hexed_noise):
@@ -86,13 +85,13 @@ class DummyTransport(object):
 
     def received(self, message):
         self.receive.append(message)
-        self.protocol.sphinx_packet_received(message)
+        self.protocol.received(message)
 
     def send(self, addr, message):
         self.sent.append((addr, message))
 
 
-@zope.interface.implementer(IMixPKI)
+@implementer(IMixPKI)
 class DummyPKI(object):
 
     def __init__(self):
@@ -117,7 +116,7 @@ class DummyPKI(object):
         pass
 
 
-def build_mixnet_nodes(pki, params, node_factory, rand_reader):
+def build_mixnet_nodes(pki, params, rand_reader):
     """
     i am a helper function used to build a testing mix network.
     given the sphinx params and a node_factory i will return
@@ -165,20 +164,6 @@ def generate_route(params, pki, destination):
     mixes = pki.identities()
     mixes.remove(destination)
     return rand_subset(mixes, params.max_hops - 1) + [destination]
-
-
-class EchoClientProtocol(object):
-    def setTransport(self, transport):
-        self.transport = transport
-
-    def messageReceived(self, message):
-        if message == b"ping":
-            print("ping received")
-            return
-        print("non-ping received")
-        #  XXX send a reply ping
-        #  outgoing_message = {'message':'ping'}
-        #  self.transport.send(message['surb'], outgoing_message)
 
 
 class FakeMixProtocol(object):
@@ -229,19 +214,19 @@ class FakeMixProtocol(object):
 
 def test_NodeProtocol():
     pki = DummyPKI()
-    node_factory = NodeFactory(pki)
-    params = node_factory.params
+    params = SphinxParams(5, 1024)
     rand_reader = FixedNoiseReader("b5451d2eb2faf3f84bc4778ace6516e73e9da6c597e6f96f7e63c7ca6c9456018be9fd84883e4469a736c66fcaeceacf080fb06bc45859796707548c356c462594d1418b5349daf8fffe21a67affec10c0a2e3639c5bd9e8a9ddde5caf2e1db802995f54beae23305f2241c6517d301808c0946d5895bfd0d4b53d8ab2760e4ec8d4b2309eec239eedbab2c6ae532da37f3b633e256c6b551ed76321cc1f301d74a0a8a0673ea7e489e984543ca05fe0ff373a6f3ed4eeeaafd18292e3b182c25216aeb80a9411a57044d20b6c4004c730a78d79550dc2f22ba1c9c05e1d15e0fcadb6b1b353f028109fd193cb7c14af3251e6940572c7cd4243977896504ce0b59b17e8da04de5eb046a92f1877b55d43def3cc11a69a11050a8abdceb45bc1f09a22960fdffce720e5ed5767fbb62be1fd369dcdea861fd8582d01666a08bf3c8fb691ac5d2afca82f4759029f8425374ae4a4c91d44d05cb1a64193319d9413de7d2cfdffe253888535a8493ab8a0949a870ae512d2137630e2e4b2d772f6ee9d3b9d8cadd2f6dc34922701b21fa69f1be6d0367a26ca")
 
-    nodes, addr_to_nodes, route = build_mixnet_nodes(pki, params, node_factory, rand_reader)
+    nodes, addr_to_nodes, route = build_mixnet_nodes(pki, params, rand_reader)
 
     dummy_client_transport = DummyTransport(99)
-    client_factory = ClientFactory(pki, rand_reader, params)
     client_id = "Client 555"
-    client = client_factory.build_protocol(client_id, dummy_client_transport)
-
+    def received(packet):
+        print "received packet of len %s" % len(packet)
+    client = ClientProtocol(params, pki, client_id, rand_reader, received)
+    client.make_connection(dummy_client_transport)
     message = b"ping"
     # first_hop_addr = pki.get_mix_addr("dummy", route[0])
     client.send(route, message)
     destination, raw_sphinx_packet = dummy_client_transport.sent.pop()
-    nodes[route[0]].protocol.sphinx_packet_received(raw_sphinx_packet)
+    nodes[route[0]].protocol.received(raw_sphinx_packet)
