@@ -23,6 +23,10 @@ class ClientProtocol(object):
     packet_receive_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
 
     def make_connection(self, transport):
+        """
+        connect this protocol with the transport
+        and start the transport
+        """
         assert IMixTransport.providedBy(transport)
         transport.register_protocol(self)
         transport.start()
@@ -30,16 +34,26 @@ class ClientProtocol(object):
         self.sphinx_client = SphinxClient(self.params, self.client_id, self.rand_reader)
 
     def received(self, packet):
+        """
+        receive a client packet, a message ID
+        and an encrypted payload
+        """
         message_id = packet[:16]
         payload = packet[16:]
         assert len(payload) == self.params.payload_size
         self.message_received(message_id, payload)
 
     def message_received(self, message_id, ciphertext):
+        """
+        decrypt the message and pass it to the message handler
+        """
         message = self.sphinx_client.decrypt(message_id, ciphertext)
         self.packet_receive_handler(message)
 
     def send(self, route, message):
+        """
+        send a wrapped inside a forward sphinx packet
+        """
         first_hop_addr = self.pki.get_mix_addr(self.transport.name, route[0])
         alpha, beta, gamma, delta = create_forward_message(self.params, route, self.pki, route[-1], message, self.rand_reader)
         serialized_sphinx_packet = sphinx_packet_encode(self.params, alpha, beta, gamma, delta)
@@ -59,9 +73,15 @@ class SprayMixClient(object):
     transport = attr.ib(validator=attr.validators.provides(IMixTransport))
 
     def start(self):
+        """
+        start the mix client
+        """
         self.protocol = ClientProtocol(self.params, self.pki, self.client_id, self.rand_reader,
                                        packet_receive_handler=lambda x: self.message_received(x))
         self.protocol.make_connection(self.transport)
 
-    def message_receive(self, message):
+    def message_received(self, message):
+        """
+        receive a message
+        """
         pass  # XXX do something with the message

@@ -27,6 +27,10 @@ class NodeProtocol(object):
     packet_receive_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
 
     def make_connection(self, transport):
+        """
+        connect this protocol with the transport
+        and start the transport
+        """
         assert IMixTransport.providedBy(transport)
         transport.register_protocol(self)
         transport.start()
@@ -34,7 +38,7 @@ class NodeProtocol(object):
 
     def received(self, raw_sphinx_packet):
         """
-        i receive a raw_packet, decode it and unwrap/decrypt it
+        receive a raw_packet, decode it and unwrap/decrypt it
         and return the results
         """
         sphinx_packet = sphinx_packet_decode(self.params, raw_sphinx_packet)
@@ -57,6 +61,9 @@ class NodeProtocol(object):
 
 
 def is_16bytes(instance, attribute, value):
+    """
+    validator for node_id which should be a 16 byte value
+    """
     if not isinstance(value, bytes) or len(value) != 16:
         raise ValueError("must be 16 byte value")
 
@@ -79,15 +86,23 @@ class ThresholdMixNode(object):
     _max_delay = attr.ib(init=False, default=600)
 
     def start(self):
+        """
+        start the mix
+        """
         self.protocol = NodeProtocol(self.replay_cache,
                                      self.key_state,
                                      self.params,
                                      self.pki,
                                      packet_receive_handler=lambda x: self.packet_received(x))
-        self.protocol.make_connection(self.transport)
         self.pki.set(self.node_id, self.key_state.get_public_key(), self.protocol.transport.addr)
+        self.protocol.make_connection(self.transport)
 
     def packet_received(self, result):
+        """
+        receive the unwrapped packet and append it to the batch.
+        if the threshold is reached then we shuffle the batch
+        and send the batch out after a random delay.
+        """
         if result.next_hop:
             self._batch.append(result.next_hop)  # [(destination, sphinx_packet)]
             if len(self._batch) >= self.threshold_count:
@@ -98,5 +113,8 @@ class ThresholdMixNode(object):
                 self.reactor.callLater(delay, self.batch_send, released)
 
     def batch_send(self, batch):
+        """
+        send a batch of mix net messages to their respective destinations
+        """
         for destination, message in batch:
             self.protocol.sphinx_packet_send(destination, message)
