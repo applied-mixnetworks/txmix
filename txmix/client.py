@@ -20,7 +20,7 @@ class ClientProtocol(object):
     pki = attr.ib(validator=attr.validators.provides(IMixPKI))
     client_id = attr.ib(validator=attr.validators.instance_of(bytes))
     rand_reader = attr.ib(validator=attr.validators.provides(IReader))
-    packet_receive_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
+    packet_received_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
 
     def make_connection(self, transport):
         """
@@ -61,9 +61,9 @@ class ClientProtocol(object):
 
 
 @attr.s
-class SprayMixClient(object):
+class MixClient(object):
     """
-    i am a client of the mixnet used for testing
+    i am a client of the mixnet
     """
 
     params = attr.ib(validator=attr.validators.instance_of(SphinxParams))
@@ -71,17 +71,36 @@ class SprayMixClient(object):
     client_id = attr.ib(validator=attr.validators.instance_of(bytes))
     rand_reader = attr.ib(validator=attr.validators.provides(IReader))
     transport = attr.ib(validator=attr.validators.provides(IMixTransport))
+    message_received_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
 
     def start(self):
         """
         start the mix client
         """
         self.protocol = ClientProtocol(self.params, self.pki, self.client_id, self.rand_reader,
-                                       packet_receive_handler=lambda x: self.message_received(x))
+                                       packet_received_handler=lambda x: self.message_received(x))
         self.protocol.make_connection(self.transport)
 
     def message_received(self, message):
         """
         receive a message
         """
-        pass  # XXX do something with the message
+        self.message_received_handler(message)
+
+    def send(self, destination, message):
+        """
+        send a message to the given destination
+        """
+
+        route = self._generate_route(destination)
+        self.protocol.send(route, message)
+
+    def _generate_route(self, destination):
+        """
+        generate a new route
+        """
+        mixes = self.pki.identities()
+        mixes.remove(destination)
+        nodeids = [(self.rand_reader.read(8), x) for x in mixes]
+        nodeids.sort(key=lambda x: x[0])
+        return [x[1] for x in nodeids[:nu]] + [destination]
