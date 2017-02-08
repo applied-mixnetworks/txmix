@@ -24,7 +24,7 @@ class NodeProtocol(object):
     key_state = attr.ib(validator=attr.validators.provides(IKeyState))
     params = attr.ib(validator=attr.validators.instance_of(SphinxParams))
     pki = attr.ib(validator=attr.validators.provides(IMixPKI))
-    packet_receive_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
+    packet_received_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
 
     def make_connection(self, transport):
         """
@@ -43,7 +43,7 @@ class NodeProtocol(object):
         """
         sphinx_packet = sphinx_packet_decode(self.params, raw_sphinx_packet)
         unwrapped_packet = sphinx_packet_unwrap(self.params, self.replay_cache, self.key_state, sphinx_packet)
-        self.packet_receive_handler(unwrapped_packet)
+        self.packet_received_handler(unwrapped_packet)
 
     def sphinx_packet_send(self, mix_id, sphinx_packet):
         """
@@ -93,9 +93,9 @@ class ThresholdMixNode(object):
                                      self.key_state,
                                      self.params,
                                      self.pki,
-                                     packet_receive_handler=lambda x: self.packet_received(x))
-        self.pki.set(self.node_id, self.key_state.get_public_key(), self.protocol.transport.addr)
+                                     packet_received_handler=lambda x: self.packet_received(x))
         self.protocol.make_connection(self.transport)
+        self.pki.set(self.node_id, self.key_state.get_public_key(), self.protocol.transport.addr)
 
     def packet_received(self, result):
         """
