@@ -13,8 +13,17 @@ def main():
     client_id = b"client"
     rand_reader = RandReader()
     transport = UDPTransport(reactor, ("127.0.0.1", 6779))
-    client = SprayMixClient(params, pki, client_id, rand_reader, transport)
+
+    def message_receive_handler(message):
+        print "client received message: %s" % message
+
+    client = SprayMixClient(params, pki, client_id, rand_reader, transport, message_receive_handler)
     client.start()
+
+    message = b"ping"
+    route = client.generate_route()
+    client.send(route, message)
+
     reactor.run()
 
 
