@@ -103,4 +103,4 @@ class MixClient(object):
         mixes.remove(destination)
         nodeids = [(self.rand_reader.read(8), x) for x in mixes]
         nodeids.sort(key=lambda x: x[0])
-        return [x[1] for x in nodeids[:nu]] + [destination]
+        return [x[1] for x in nodeids[:self.params.max_hops - 1]] + [destination]
