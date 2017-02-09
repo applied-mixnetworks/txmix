@@ -6,9 +6,8 @@ import random
 from twisted.internet.interfaces import IReactorCore
 from twisted.internet import reactor
 
-from sphinxmixcrypto import sphinx_packet_unwrap, SphinxParams
+from sphinxmixcrypto import sphinx_packet_unwrap, SphinxParams, SphinxPacket
 from sphinxmixcrypto import IPacketReplayCache, IKeyState, IMixPKI
-from sphinxmixcrypto import sphinx_packet_encode, sphinx_packet_decode
 
 from txmix.interfaces import IMixTransport
 
@@ -41,7 +40,7 @@ class NodeProtocol(object):
         receive a raw_packet, decode it and unwrap/decrypt it
         and return the results
         """
-        sphinx_packet = sphinx_packet_decode(self.params, raw_sphinx_packet)
+        sphinx_packet = SphinxPacket.from_raw_bytes(self.params, raw_sphinx_packet)
         unwrapped_packet = sphinx_packet_unwrap(self.params, self.replay_cache, self.key_state, sphinx_packet)
         self.packet_received_handler(unwrapped_packet)
 
@@ -50,13 +49,8 @@ class NodeProtocol(object):
         given a SphinxPacket object I shall encode it into
         a raw packet and send it to the mix with mix_id
         """
-        raw_sphinx_packet = sphinx_packet_encode(
-            sphinx_packet['alpha'],
-            sphinx_packet['beta'],
-            sphinx_packet['gamma'],
-            sphinx_packet['delta'])
-
         addr = self.pki.get_mix_addr(self.transport.name, mix_id)
+        raw_sphinx_packet = sphinx_packet.get_raw_bytes()
         self.transport.send(addr, raw_sphinx_packet)
 
 

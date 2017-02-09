@@ -2,7 +2,7 @@
 import attr
 import types
 
-from sphinxmixcrypto import SphinxParams, SphinxClient, create_forward_message, sphinx_packet_encode
+from sphinxmixcrypto import SphinxParams, SphinxClient, create_forward_message
 from sphinxmixcrypto import IMixPKI, IReader
 
 from txmix import IMixTransport
@@ -55,9 +55,9 @@ class ClientProtocol(object):
         send a wrapped inside a forward sphinx packet
         """
         first_hop_addr = self.pki.get_mix_addr(self.transport.name, route[0])
-        alpha, beta, gamma, delta = create_forward_message(self.params, route, self.pki, route[-1], message, self.rand_reader)
-        serialized_sphinx_packet = sphinx_packet_encode(self.params, alpha, beta, gamma, delta)
-        self.transport.send(first_hop_addr, serialized_sphinx_packet)
+        sphinx_packet = create_forward_message(self.params, route, self.pki, route[-1], message, self.rand_reader)
+        raw_sphinx_packet = sphinx_packet.get_raw_bytes()
+        self.transport.send(first_hop_addr, raw_sphinx_packet)
 
 
 @attr.s
@@ -91,7 +91,6 @@ class MixClient(object):
         """
         send a message to the given destination
         """
-
         route = self._generate_route(destination)
         self.protocol.send(route, message)
 
@@ -100,6 +99,7 @@ class MixClient(object):
         generate a new route
         """
         mixes = self.pki.identities()
+        assert len(mixes) >= self.params.max_hops
         mixes.remove(destination)
         nodeids = [(self.rand_reader.read(8), x) for x in mixes]
         nodeids.sort(key=lambda x: x[0])

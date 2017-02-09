@@ -8,7 +8,7 @@ from sphinxmixcrypto import PacketReplayCacheDict, GroupCurve25519, SphinxParams
 from sphinxmixcrypto import IReader, IKeyState, IMixPKI
 
 from txmix import IMixTransport
-from txmix import ThresholdMixNode, ClientProtocol
+from txmix import ThresholdMixNode, ClientProtocol, MixClient
 
 
 @implementer(IReader)
@@ -138,77 +138,7 @@ def build_mixnet_nodes(pki, params, rand_reader):
         mix.start()
         nodes[node_id] = mix
         addr_to_nodes[addr] = mix
-    route = nodes.keys()[:5]
-    return nodes, addr_to_nodes, route
-
-
-def rand_subset(lst, nu):
-    """
-    Return a list of nu random elements of the given list (without
-    replacement).
-    """
-    # Randomize the order of the list by sorting on a random key
-    nodeids = [(os.urandom(8), x) for x in lst]
-    nodeids.sort(key=lambda x: x[0])
-    # Return the first nu elements of the randomized list
-    return [x[1] for x in nodeids[:nu]]
-
-
-def generate_route(params, pki, destination):
-    """
-    given a destination node ID a randomly chosen
-    route is returned: a list of mix node IDs
-    where the last element is the destination
-    """
-    mixes = pki.identities()
-    mixes.remove(destination)
-    return rand_subset(mixes, params.max_hops - 1) + [destination]
-
-
-class FakeMixProtocol(object):
-    sent_mix = []
-    sent_exit_mix = []
-    sent_nymserver = []
-
-    def setTransport(self, transport):
-        self.transport = transport
-
-    def send_to_exit_mix(self, destination, sphinx_message):
-        self.sent_exit_mix.append((destination, sphinx_message))
-
-    def send_to_mix(self, destination, sphinx_message):
-        self.sent_mix.append((destination, sphinx_message))
-
-    def send_to_nymserver(self, nym_id, message):
-        self.sent_nymserver.append((nym_id, message))
-
-    def messageResultReceived(self, messageResult):
-        if messageResult.tuple_next_hop:
-            nextHop, header, delta = messageResult.tuple_next_hop
-            alpha, beta, gamma = header
-            sphinx_message = {
-                "alpha": alpha,
-                "beta": beta,
-                "gamma": gamma,
-                "delta": delta,
-            }
-            self.send_to_mix(nextHop, sphinx_message)
-        elif messageResult.tuple_exit_hop:
-            destination, message = messageResult.tuple_exit_hop
-            sphinx_message = {
-                "alpha": None,
-                "beta": None,
-                "gamma": None,
-                "delta": message,
-            }
-            self.send_to_exit_mix(destination, sphinx_message)
-        else:
-            assert messageResult.tuple_client_hop
-            nym_id, message = messageResult.tuple_client_hop
-            self.send_to_nymserver(nym_id, message)
-
-    def messageSend(self, destination, message):
-        pass
+    return nodes, addr_to_nodes
 
 
 def test_NodeProtocol():
@@ -216,18 +146,17 @@ def test_NodeProtocol():
     params = SphinxParams(5, 1024)
     rand_reader = FixedNoiseReader("b5451d2eb2faf3f84bc4778ace6516e73e9da6c597e6f96f7e63c7ca6c9456018be9fd84883e4469a736c66fcaeceacf080fb06bc45859796707548c356c462594d1418b5349daf8fffe21a67affec10c0a2e3639c5bd9e8a9ddde5caf2e1db802995f54beae23305f2241c6517d301808c0946d5895bfd0d4b53d8ab2760e4ec8d4b2309eec239eedbab2c6ae532da37f3b633e256c6b551ed76321cc1f301d74a0a8a0673ea7e489e984543ca05fe0ff373a6f3ed4eeeaafd18292e3b182c25216aeb80a9411a57044d20b6c4004c730a78d79550dc2f22ba1c9c05e1d15e0fcadb6b1b353f028109fd193cb7c14af3251e6940572c7cd4243977896504ce0b59b17e8da04de5eb046a92f1877b55d43def3cc11a69a11050a8abdceb45bc1f09a22960fdffce720e5ed5767fbb62be1fd369dcdea861fd8582d01666a08bf3c8fb691ac5d2afca82f4759029f8425374ae4a4c91d44d05cb1a64193319d9413de7d2cfdffe253888535a8493ab8a0949a870ae512d2137630e2e4b2d772f6ee9d3b9d8cadd2f6dc34922701b21fa69f1be6d0367a26ca")
 
-    nodes, addr_to_nodes, route = build_mixnet_nodes(pki, params, rand_reader)
-
+    nodes, addr_to_nodes = build_mixnet_nodes(pki, params, rand_reader)
     dummy_client_transport = DummyTransport(99)
     client_id = "Client 555"
 
     def received(packet):
         print "received packet of len %s" % len(packet)
 
-    client = ClientProtocol(params, pki, client_id, rand_reader, received)
-    client.make_connection(dummy_client_transport)
+    client = MixClient(params, pki, client_id, rand_reader, dummy_client_transport, lambda x: received)
+    client.start()
     message = b"ping"
-    # first_hop_addr = pki.get_mix_addr("dummy", route[0])
-    client.send(route, message)
-    destination, raw_sphinx_packet = dummy_client_transport.sent.pop()
-    nodes[route[0]].protocol.received(raw_sphinx_packet)
+    destination = pki.identities()[0]
+    client.send(destination, message)
+    address, raw_sphinx_packet = dummy_client_transport.sent.pop()
+    addr_to_nodes[address].protocol.received(raw_sphinx_packet)

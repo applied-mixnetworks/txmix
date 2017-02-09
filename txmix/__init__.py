@@ -4,7 +4,7 @@ txmix is a messaging API for building mix networks
 
 from txmix.interfaces import IMixTransport
 from txmix.common import NodeDescriptor
-from txmix.client import ClientProtocol
+from txmix.client import ClientProtocol, MixClient
 from txmix.node import NodeProtocol, ThresholdMixNode
 from txmix.transports import UDPTransport
 
@@ -17,5 +17,6 @@ __all__ = [
     "IMixTransport",
     "UDPTransport",
     "Client",
+    "MixClient",
     "ThresholdMixNode",
 ]
