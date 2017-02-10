@@ -8,7 +8,7 @@ from sphinxmixcrypto import PacketReplayCacheDict, GroupCurve25519, SphinxParams
 from sphinxmixcrypto import IReader, IKeyState, IMixPKI
 
 from txmix import IMixTransport
-from txmix import ThresholdMixNode, ClientProtocol, MixClient
+from txmix import ThresholdMixNode, MixClient
 
 
 @implementer(IReader)
