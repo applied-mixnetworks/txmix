@@ -7,8 +7,9 @@ from zope.interface import implementer
 from sphinxmixcrypto import PacketReplayCacheDict, GroupCurve25519, SphinxParams, SECURITY_PARAMETER
 from sphinxmixcrypto import IReader, IKeyState, IMixPKI
 
-from txmix import IMixTransport
-from txmix import ThresholdMixNode, MixClient
+from txmix.interfaces import IMixTransport
+from txmix.node import ThresholdMixNode
+from txmix.client import MixClient
 
 
 @implementer(IReader)
