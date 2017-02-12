@@ -117,5 +117,6 @@ class MixClient(object):
     def send(self, destination, message):
         """
         send a message to the given destination
+        returns a deferred
         """
-        self.protocol.send(self.route_factory.build_route(destination), message)
+        return self.protocol.send(self.route_factory.build_route(destination), message)
