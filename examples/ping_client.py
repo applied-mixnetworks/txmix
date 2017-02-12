@@ -23,7 +23,7 @@ def main():
 
     def use_client(result):
         message = b"ping"
-        destination = self.pki.identities()[0]
+        destination = pki.identities()[0]
         client.send(destination, message)
 
     d.addCallback(use_client)
