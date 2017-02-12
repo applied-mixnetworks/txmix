@@ -26,3 +26,14 @@ class IMixTransport(Interface):
         """
         Send a message to a mix network node identified by addr.
         """
+
+
+class IRouteFactory(Interface):
+    """
+    Interface for a route factory which builds mixnet routes for clients.
+    """
+
+    def build_route(destination):
+        """
+        return a new route
+        """

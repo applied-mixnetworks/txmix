@@ -9,7 +9,7 @@ from sphinxmixcrypto import IReader, IKeyState, IMixPKI
 
 from txmix.interfaces import IMixTransport
 from txmix.node import ThresholdMixNode
-from txmix.client import MixClient
+from txmix.client import MixClient, RandomRouteFactory
 
 
 @implementer(IReader)
@@ -150,11 +150,14 @@ def test_NodeProtocol():
     nodes, addr_to_nodes = build_mixnet_nodes(pki, params, rand_reader)
     dummy_client_transport = DummyTransport(99)
     client_id = "Client 555"
+    # XXX todo: make deterministic route
+    # route_factory = FakeRouteFactory()
+    route_factory = RandomRouteFactory(params, pki, rand_reader)
 
     def received(packet):
         print "received packet of len %s" % len(packet)
 
-    client = MixClient(params, pki, client_id, rand_reader, dummy_client_transport, lambda x: received)
+    client = MixClient(params, pki, client_id, rand_reader, dummy_client_transport, lambda x: received(x), route_factory)
     client.start()
     message = b"ping"
     destination = pki.identities()[0]

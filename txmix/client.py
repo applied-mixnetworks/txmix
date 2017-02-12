@@ -5,15 +5,16 @@ import types
 from sphinxmixcrypto import SphinxParams, SphinxClient, SphinxPacket
 from sphinxmixcrypto import IMixPKI, IReader
 
-from txmix import IMixTransport
+from txmix import IMixTransport, IRouteFactory
+from zope.interface import implementer
 
 
 @attr.s
 class ClientProtocol(object):
     """
-    I am a sphinx mix network client protocol which
-    means I have a producer/consumer relationship with
-    a sphinx mix network client transport.
+    I am a sphinx mix network client protocol which means I act as a
+    proxy between the client and the transport.  I decrypt messages
+    before proxying them.
     """
 
     params = attr.ib(validator=attr.validators.instance_of(SphinxParams))
@@ -60,10 +61,33 @@ class ClientProtocol(object):
         self.transport.send(first_hop_addr, raw_sphinx_packet)
 
 
+@implementer(IRouteFactory)
+@attr.s
+class RandomRouteFactory(object):
+    """
+    I create random routes.
+    """
+    params = attr.ib(validator=attr.validators.instance_of(SphinxParams))
+    pki = attr.ib(validator=attr.validators.provides(IMixPKI))
+    rand_reader = attr.ib(validator=attr.validators.provides(IReader))
+
+    def build_route(self, destination):
+        """
+        return a new random route
+        """
+        #  XXX todo: assert destination type
+        mixes = self.pki.identities()
+        assert len(mixes) >= self.params.max_hops
+        mixes.remove(destination)
+        nodeids = [(self.rand_reader.read(8), x) for x in mixes]
+        nodeids.sort(key=lambda x: x[0])
+        return [x[1] for x in nodeids[:self.params.max_hops - 1]] + [destination]
+
+
 @attr.s
 class MixClient(object):
     """
-    i am a client of the mixnet
+    i am a client of the mixnet.
     """
 
     params = attr.ib(validator=attr.validators.instance_of(SphinxParams))
@@ -72,6 +96,7 @@ class MixClient(object):
     rand_reader = attr.ib(validator=attr.validators.provides(IReader))
     transport = attr.ib(validator=attr.validators.provides(IMixTransport))
     message_received_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
+    route_factory = attr.ib(validator=attr.validators.provides(IRouteFactory))
 
     def start(self):
         """
@@ -91,16 +116,4 @@ class MixClient(object):
         """
         send a message to the given destination
         """
-        route = self._generate_route(destination)
-        self.protocol.send(route, message)
-
-    def _generate_route(self, destination):
-        """
-        generate a new route
-        """
-        mixes = self.pki.identities()
-        assert len(mixes) >= self.params.max_hops
-        mixes.remove(destination)
-        nodeids = [(self.rand_reader.read(8), x) for x in mixes]
-        nodeids.sort(key=lambda x: x[0])
-        return [x[1] for x in nodeids[:self.params.max_hops - 1]] + [destination]
+        self.protocol.send(self.route_factory.build_route(destination), message)
