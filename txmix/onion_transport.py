@@ -37,7 +37,7 @@ class OnionTransport(object, Protocol):
     A Tor onion service is used for receiving messages.
     """
     name = "onion"
-    addr = attr.ib(validator=attr.validators.instance_of(tuple))
+    buffer = []
 
     sphinx_packet_size = attr.ib(validator=attr.validators.instance_of(int))
     tor_control_protocol = attr.ib(validator=attr.validators.provides(ITorControlProtocol))
@@ -107,8 +107,16 @@ class OnionTransport(object, Protocol):
     # Protocol parent method overwriting
 
     def dataReceived(self, data):
-        assert len(data) == self.sphinx_packet_size
-        self.protocol.received(data)
+        if len(data) == self.sphinx_packet_size and len(self.buffer) == 0:
+            self.protocol.received(data)
+            return
+
+        if len(data) < self.sphinx_packet_size:
+            self.buffer.append(data)
+        elif len(data) > self.sphinx_packet_size:
+            self.buffer.append(data[self.sphinx_packet_size:])
+            self.protocol.received(data[:self.sphinx_packet_size])
+            return
 
     def connectionLost(self):
         """
