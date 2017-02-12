@@ -88,7 +88,21 @@ class OnionTransport(object, Protocol):
         send message to addr
         where addr is a 2-tuple of type: (onion host, onion port)
         """
-        endpoints.clientFromString("tor:%s:%s" % addr)
+        tor_endpoint = endpoints.clientFromString("tor:%s:%s" % addr)
+        send_message_protocol = Protocol()
+
+        class OneShotSendProtocol(Protocol):
+            """
+            """
+        send_message_protocol = OneShotSendProtocol()
+        d = endpoints.connectProtocol(tor_endpoint, send_message_protocol)
+
+        def is_connected(protocol):
+            protocol.transport.write(message)
+            protocol.loseConnection()
+
+        d.addCallback(is_connected)
+        return d
 
     # Protocol parent method overwriting
 
