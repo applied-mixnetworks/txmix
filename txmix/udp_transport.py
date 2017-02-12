@@ -5,6 +5,7 @@ import attr
 from zope.interface import implementer
 from twisted.internet.interfaces import IReactorUDP
 from twisted.internet.protocol import DatagramProtocol
+from twisted.internet import defer
 
 from txmix import IMixTransport
 
@@ -30,6 +31,7 @@ class UDPTransport(DatagramProtocol, object):
         """
         interface, port = self.addr
         self.reactor.listenUDP(port, self, interface=interface)
+        return defer.succeed(None)
 
     def send(self, addr, message):
         """
