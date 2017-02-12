@@ -30,9 +30,10 @@ class ClientProtocol(object):
         """
         assert IMixTransport.providedBy(transport)
         transport.register_protocol(self)
-        transport.start()
+        d = transport.start()
         self.transport = transport
         self.sphinx_client = SphinxClient(self.params, self.client_id, self.rand_reader)
+        return d
 
     def received(self, packet):
         """
@@ -104,7 +105,8 @@ class MixClient(object):
         """
         self.protocol = ClientProtocol(self.params, self.pki, self.client_id, self.rand_reader,
                                        packet_received_handler=lambda x: self.message_received(x))
-        self.protocol.make_connection(self.transport)
+        d = self.protocol.make_connection(self.transport)
+        return d
 
     def message_received(self, message):
         """
