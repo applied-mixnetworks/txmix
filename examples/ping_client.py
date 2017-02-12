@@ -3,7 +3,7 @@ from twisted.internet import reactor
 
 from sphinxmixcrypto import SphinxParams
 from txmix import UDPTransport
-from txmix import SprayMixClient, RandomRouteFactory
+from txmix import MixClient, RandomRouteFactory
 from txmix import DummyPKI, RandReader
 
 
@@ -18,13 +18,15 @@ def main():
     def message_receive_handler(message):
         print "client received message: %s" % message
 
-    client = SprayMixClient(params, pki, client_id, rand_reader, transport, message_receive_handler, route_factory)
-    client.start()
+    client = MixClient(params, pki, client_id, rand_reader, transport, message_receive_handler, route_factory)
+    d = client.start()
 
-    message = b"ping"
-    route = client.generate_route()
-    client.send(route, message)
+    def use_client(result):
+        message = b"ping"
+        destination = self.pki.identities()[0]
+        client.send(destination, message)
 
+    d.addCallback(use_client)
     reactor.run()
 
 

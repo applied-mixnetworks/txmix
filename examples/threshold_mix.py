@@ -3,9 +3,9 @@ from twisted.internet import reactor
 
 from sphinxmixcrypto import PacketReplayCacheDict, SphinxParams
 
-from txmix.transports import UDPTransport
-from txmix.node import ThresholdMixNode
-from txmix.utils import RandReader, generate_node_keypair, generate_node_id, DummyPKI, SphinxNodeKeyState
+from txmix import UDPTransport
+from txmix import ThresholdMixNode
+from txmix import RandReader, generate_node_keypair, generate_node_id, DummyPKI, SphinxNodeKeyState
 
 
 def main():

@@ -8,7 +8,7 @@ from txmix.common import NodeDescriptor
 from txmix.client import ClientProtocol, MixClient, RandomRouteFactory
 from txmix.node import NodeProtocol, ThresholdMixNode
 from txmix.udp_transport import UDPTransport
-
+from txmix.utils import DummyPKI, RandReader, generate_node_keypair, generate_node_id, SphinxNodeKeyState
 
 __all__ = [
     "ClientProtocol",
@@ -26,4 +26,9 @@ __all__ = [
 
     "NodeDescriptor",
     "SphinxPacketEncoding",
+    "DummyPKI",
+    "RandReader",
+    "SphinxNodeKeyState",
+    "generate_node_keypair",
+    "generate_node_id",
 ]
