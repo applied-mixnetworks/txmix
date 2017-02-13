@@ -21,7 +21,8 @@ from zope.interface import implementer
 from twisted.internet import endpoints
 from twisted.internet.interfaces import IReactorCore
 from twisted.internet.protocol import Protocol
-from twisted.internet.defer import inlineCallbacks
+from twisted.internet import defer
+from twisted.internet.error import ConnectionDone
 import txtorcon
 from txtorcon import ITorControlProtocol, EphemeralHiddenService
 
@@ -38,9 +39,9 @@ class OnionTransportFactory(object):
     tor_control_tcp_host = attr.ib(validator=attr.validators.instance_of(str), default=None)
     tor_control_tcp_port = attr.ib(validator=attr.validators.instance_of(int), default=None)
     onion_unix_socket = attr.ib(validator=attr.validators.instance_of(str), default=None)
-    onion_tcp_interface = attr.ib(validator=attr.validators.instance_of(str), default=None)
+    onion_tcp_interface_ip = attr.ib(validator=attr.validators.instance_of(str), default=None)
 
-    @inlineCallbacks
+    @defer.inlineCallbacks
     def build_transport(self):
         if self.tor_control_unix_socket is None:
             control_socket_endpoint = "unix:%s" % self.onion_unix_socket
@@ -67,7 +68,13 @@ class OnionTransportFactory(object):
                                    onion_tcp_interface="127.0.0.1",
                                    onion_tcp_port=local_port,
                                    onion_port=999)
-        yield transport
+        defer.returnValue(transport)
+
+
+class OnionTransportConnectionFailure(Exception):
+    """
+    onion transport connection failure exception
+    """
 
 
 @implementer(IMixTransport)
@@ -159,9 +166,9 @@ class OnionTransport(object, Protocol):
             self.protocol.received(data[:self.sphinx_packet_size])
             return
 
-    def connectionLost(self):
+    def connectionLost(self, reason):
         """
         Called when the connection is shut down.
         """
-        # XXX raise some kind of exception?
-        pass
+        if not isinstance(reason, ConnectionDone):
+            raise OnionTransportConnectionFailure()
