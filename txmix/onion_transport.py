@@ -14,8 +14,6 @@ already provided by the mix network, however we use the Tor transport
 because it's convenient that it accomplishes the first three properties.
 """
 
-from __future__ import print_function
-
 import attr
 from zope.interface import implementer
 from twisted.internet import endpoints
@@ -40,34 +38,35 @@ class OnionTransportFactory(object):
     tor_control_tcp_port = attr.ib(validator=attr.validators.instance_of(int), default=None)
     onion_unix_socket = attr.ib(validator=attr.validators.instance_of(str), default=None)
     onion_tcp_interface_ip = attr.ib(validator=attr.validators.instance_of(str), default=None)
+    onion_service_port = 999
 
     @defer.inlineCallbacks
     def build_transport(self):
-        if self.tor_control_unix_socket is None:
-            control_socket_endpoint = "unix:%s" % self.onion_unix_socket
+        if len(self.tor_control_unix_socket) == 0:
+            assert len(self.onion_tcp_interface_ip) != 0
+            control_socket_endpoint = "tcp:%s:%s" % (self.tor_control_tcp_host, self.tor_control_tcp_port)
         else:
-            control_socket_endpoint = "tcp:%s:%s" % (self.onion_tcp_interface, self.onion_tcp_port)
-
+            control_socket_endpoint = "unix:%s" % self.tor_control_unix_socket
         endpoint = endpoints.clientFromString(self.reactor, control_socket_endpoint.encode('utf-8'))
         tor_control_protocol = yield txtorcon.build_tor_connection(endpoint, build_state=False)
-
-        if self.onion_unix_socket is None:
-            local_port = yield txtorcon.util.available_tcp_port(self.reactor)
-            hs = EphemeralHiddenService(["999 %s:%s" % (self.onion_tcp_interface, local_port)])
+        onion_tcp_port = 0
+        if len(self.onion_unix_socket) == 0:
+            onion_tcp_port = yield txtorcon.util.available_tcp_port(self.reactor)
+            hs = EphemeralHiddenService(["%s %s:%s" % (self.onion_service_port, self.onion_tcp_interface_ip, onion_tcp_port)])
         else:
-            hs = EphemeralHiddenService(["999 unix:%s" % self.onion_unix_socket])
-        hs = yield hs.add_to_tor(tor_control_protocol)
-
+            hs = EphemeralHiddenService(["%s unix:%s" % (self.onion_service_port, self.onion_unix_socket)])
+        yield hs.add_to_tor(tor_control_protocol)
         alpha, beta, gamma, delta = self.params.get_dimensions()
         sphinx_packet_size = alpha + beta + gamma + delta
-
-        transport = OnionTransport(sphinx_packet_size,
+        transport = OnionTransport(self.reactor,
+                                   sphinx_packet_size,
                                    tor_control_protocol,
                                    onion_host=hs.hostname,
+                                   onion_port=self.onion_service_port,
                                    onion_key=hs.private_key,
-                                   onion_tcp_interface="127.0.0.1",
-                                   onion_tcp_port=local_port,
-                                   onion_port=999)
+                                   onion_tcp_interface_ip=self.onion_tcp_interface_ip,
+                                   onion_tcp_port=onion_tcp_port,
+                                   )
         defer.returnValue(transport)
 
 
@@ -87,6 +86,7 @@ class OnionTransport(object, Protocol):
     name = "onion"
     buffer = []
 
+    reactor = attr.ib(validator=attr.validators.provides(IReactorCore))
     sphinx_packet_size = attr.ib(validator=attr.validators.instance_of(int))
     tor_control_protocol = attr.ib(validator=attr.validators.provides(ITorControlProtocol))
 
@@ -98,9 +98,9 @@ class OnionTransport(object, Protocol):
     # a unix domain socket listener for receiving inbound Tor onion service
     # connections. Some security sandboxing environments might enforce using
     # unix domain sockets.
-    onion_unix_socket = attr.ib(validator=attr.validators.instance_of(str), default=None)
-    onion_tcp_interface = attr.ib(validator=attr.validators.instance_of(str), default=None)
-    onion_tcp_port = attr.ib(validator=attr.validators.instance_of(int), default=None)
+    onion_unix_socket = attr.ib(validator=attr.validators.instance_of(str), default="")
+    onion_tcp_interface_ip = attr.ib(validator=attr.validators.instance_of(str), default="")
+    onion_tcp_port = attr.ib(validator=attr.validators.instance_of(int), default=0)
 
     def register_protocol(self, protocol):
         # XXX todo: assert that protocol provides the appropriate interface
@@ -111,18 +111,19 @@ class OnionTransport(object, Protocol):
         make this transport begin listening on the specified interface and UDP port
         interface must be an IP address
         """
-        onion, onion_port = self.addr
-        assert onion_port > 1024
         hs_strings = []
-        if self.onion_unix_socket is None:
-            local_socket_endpoint = "unix:%s" % self.onion_unix_socket
+        if len(self.onion_unix_socket) == 0:
+            local_socket_endpoint_desc = "tcp:interface=%s:%s" % (self.onion_tcp_interface_ip, self.onion_tcp_port)
         else:
-            local_socket_endpoint = "tcp:%s:%s" % (self.onion_tcp_interface, self.onion_tcp_port)
-        d = endpoints.connectProtocol(local_socket_endpoint, self)
+            local_socket_endpoint_desc = "unix:%s" % self.onion_unix_socket
+        onion_service_endpoint = endpoints.serverFromString(self.reactor, local_socket_endpoint_desc)
+        print "onion_service_endpoint %s" % onion_service_endpoint
+        d = endpoints.connectProtocol(onion_service_endpoint, self)
+        print "after endpoint connectProtocol"
 
         def got_socket(result):
-            if self.onion_unix_socket is None:
-                hs_strings.append("%s %s:%s" % (self.onion_port, self.onion_tcp_interface, self.onion_tcp_port))
+            if len(self.onion_unix_socket) == 0:
+                hs_strings.append("%s %s:%s" % (self.onion_port, self.onion_tcp_interface_ip, self.onion_tcp_port))
             else:
                 hs_strings.append("%s unix:%s" % (self.onion_port, self.onion_unix_socket))
             hs = txtorcon.torconfig.EphemeralHiddenService(hs_strings, key_blob_or_type=self.onion_key)
