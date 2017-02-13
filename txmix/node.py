@@ -114,7 +114,9 @@ class ThresholdMixNode(object):
         """
         send a batch of mix net messages to their respective destinations
         """
-        yield self._batch_d
+
+        if self._batch_d is not None:
+            yield self._batch_d
         assert self._batch_d is None
         dl = []
         for destination, message in batch:
