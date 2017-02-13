@@ -3,6 +3,7 @@
 import os
 import binascii
 from zope.interface import implementer
+from twisted.internet import defer
 
 from sphinxmixcrypto import PacketReplayCacheDict, GroupCurve25519, SphinxParams, SECURITY_PARAMETER
 from sphinxmixcrypto import IReader, IKeyState, IMixPKI
@@ -81,7 +82,7 @@ class DummyTransport(object):
         self.protocol = protocol
 
     def start(self):
-        pass
+        return defer.succeed(None)
 
     def received(self, message):
         self.receive.append(message)
@@ -89,6 +90,7 @@ class DummyTransport(object):
 
     def send(self, addr, message):
         self.sent.append((addr, message))
+        return defer.succeed(None)
 
 
 @implementer(IMixPKI)
@@ -116,6 +118,7 @@ class DummyPKI(object):
         pass
 
 
+@defer.inlineCallbacks
 def build_mixnet_nodes(pki, params, rand_reader):
     """
     i am a helper function used to build a testing mix network.
@@ -136,18 +139,19 @@ def build_mixnet_nodes(pki, params, rand_reader):
         node_id = generate_node_id(rand_reader)
         threshold_count = 100
         mix = ThresholdMixNode(threshold_count, node_id, replay_cache, key_state, params, pki, transport)
-        mix.start()
+        yield mix.start()
         nodes[node_id] = mix
         addr_to_nodes[addr] = mix
-    return nodes, addr_to_nodes
+    defer.returnValue(nodes, addr_to_nodes)
 
 
+@defer.inlineCallbacks
 def test_NodeProtocol():
     pki = DummyPKI()
     params = SphinxParams(5, 1024)
     rand_reader = FixedNoiseReader("b5451d2eb2faf3f84bc4778ace6516e73e9da6c597e6f96f7e63c7ca6c9456018be9fd84883e4469a736c66fcaeceacf080fb06bc45859796707548c356c462594d1418b5349daf8fffe21a67affec10c0a2e3639c5bd9e8a9ddde5caf2e1db802995f54beae23305f2241c6517d301808c0946d5895bfd0d4b53d8ab2760e4ec8d4b2309eec239eedbab2c6ae532da37f3b633e256c6b551ed76321cc1f301d74a0a8a0673ea7e489e984543ca05fe0ff373a6f3ed4eeeaafd18292e3b182c25216aeb80a9411a57044d20b6c4004c730a78d79550dc2f22ba1c9c05e1d15e0fcadb6b1b353f028109fd193cb7c14af3251e6940572c7cd4243977896504ce0b59b17e8da04de5eb046a92f1877b55d43def3cc11a69a11050a8abdceb45bc1f09a22960fdffce720e5ed5767fbb62be1fd369dcdea861fd8582d01666a08bf3c8fb691ac5d2afca82f4759029f8425374ae4a4c91d44d05cb1a64193319d9413de7d2cfdffe253888535a8493ab8a0949a870ae512d2137630e2e4b2d772f6ee9d3b9d8cadd2f6dc34922701b21fa69f1be6d0367a26ca")
 
-    nodes, addr_to_nodes = build_mixnet_nodes(pki, params, rand_reader)
+    nodes, addr_to_nodes = yield build_mixnet_nodes(pki, params, rand_reader)
     dummy_client_transport = DummyTransport(99)
     client_id = "Client 555"
     # XXX todo: make deterministic route
@@ -158,9 +162,9 @@ def test_NodeProtocol():
         print "received packet of len %s" % len(packet)
 
     client = MixClient(params, pki, client_id, rand_reader, dummy_client_transport, lambda x: received(x), route_factory)
-    client.start()
+    yield client.start()
     message = b"ping"
     destination = pki.identities()[0]
-    client.send(destination, message)
+    yield client.send(destination, message)
     address, raw_sphinx_packet = dummy_client_transport.sent.pop()
     addr_to_nodes[address].protocol.received(raw_sphinx_packet)
