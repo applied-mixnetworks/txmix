@@ -29,7 +29,8 @@ from sphinxmixcrypto import SphinxParams
 from txmix import IMixTransport
 
 
-class OnionTransportFactory():
+@attr.s()
+class OnionTransportFactory(object):
 
     reactor = attr.ib(validator=attr.validators.provides(IReactorCore))
     params = attr.ib(validator=attr.validators.instance_of(SphinxParams))
