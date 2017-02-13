@@ -2,7 +2,7 @@
 
 import attr
 import click
-from twisted.internet import reactor, defer
+from twisted.internet import reactor
 
 from sphinxmixcrypto import SphinxParams, IMixPKI, IReader
 from txmix import OnionTransportFactory
@@ -50,11 +50,15 @@ class PingClient(object):
         return self.client.send(destination, message)
 
 
-@click.command()
+@click.command(context_settings=dict(help_option_names=['-h', '--help']))
 @click.option('--tor-control-unix-socket', default=None, type=str, help="unix socket name for connecting to the tor control port")
 @click.option('--tor-control-tcp-host', default=None, type=str, help="tcp host for connecting to the tor control port")
 @click.option('--tor-data', default=None, type=str, help="launch tor data directory")
 def main(tor_control_unix_socket, tor_control_tcp_host, tor_data):
+    """
+    send a "ping" packet and wait for a reply
+    """
+
     params = SphinxParams(max_hops=5, payload_size=1024)
     pki = DummyPKI()
     client_id = b"client"
@@ -71,6 +75,7 @@ def main(tor_control_unix_socket, tor_control_tcp_host, tor_data):
     d.addCallback(lambda ign: client.wait_for_reply())
 
     reactor.run()
+
 
 if __name__ == '__main__':
     main()
