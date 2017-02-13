@@ -59,7 +59,7 @@ class ClientProtocol(object):
         first_hop_addr = self.pki.get_mix_addr(self.transport.name, route[0])
         sphinx_packet = SphinxPacket.forward_message(self.params, route, self.pki, route[-1], message, self.rand_reader)
         raw_sphinx_packet = sphinx_packet.get_raw_bytes()
-        self.transport.send(first_hop_addr, raw_sphinx_packet)
+        return self.transport.send(first_hop_addr, raw_sphinx_packet)
 
 
 @implementer(IRouteFactory)
