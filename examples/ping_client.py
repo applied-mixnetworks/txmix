@@ -54,7 +54,6 @@ class PingClient(object):
 @click.option('--tor-control-unix-socket', default=None, type=str, help="unix socket name for connecting to the tor control port")
 @click.option('--tor-control-tcp-host', default=None, type=str, help="tcp host for connecting to the tor control port")
 @click.option('--tor-data', default=None, type=str, help="launch tor data directory")
-@defer.inlineCallbacks
 def main(tor_control_unix_socket, tor_control_tcp_host, tor_data):
     params = SphinxParams(max_hops=5, payload_size=1024)
     pki = DummyPKI()
@@ -66,16 +65,12 @@ def main(tor_control_unix_socket, tor_control_tcp_host, tor_data):
     destination = pki.identities()[0]  # XXX todo: pick a more interesting destination
     message = b"ping"
     client = PingClient(params, pki, client_id, rand_reader, transport, route_factory)
-    yield client.start()
-    yield client.send(destination, message)
-    yield client.wait_for_reply()
-    defer.returnValue(None)
 
+    d = client.start()
+    d.addCallback(lambda ign: client.send(destination, message))
+    d.addCallback(lambda ign: client.wait_for_reply())
+
+    reactor.run()
 
 if __name__ == '__main__':
-    try:
-        reactor.callWhenRunning(main)
-    except ClickException, e:
-        e.show()
-        sys.exit(1)
-    reactor.run()
+    main()
