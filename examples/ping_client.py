@@ -53,6 +53,9 @@ class PingClient(object):
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
 @click.option('--tor-control-unix-socket', default=None, type=str, help="unix socket name for connecting to the tor control port")
 @click.option('--tor-control-tcp-host', default=None, type=str, help="tcp host for connecting to the tor control port")
+@click.option('--tor-control-tcp-port', default=None, type=str, help="tcp port for connecting to the tor control port")
+@click.option('--onion-unix-socket', default=None, type=str, help="unix socket file that our onion service should use")
+@click.option('--onion-tcp-interface-ip', default=None, type=str, help="the interface to listen on for onion connections")
 @click.option('--tor-data', default=None, type=str, help="launch tor data directory")
 def main(tor_control_unix_socket, tor_control_tcp_host, tor_data):
     """
@@ -63,14 +66,20 @@ def main(tor_control_unix_socket, tor_control_tcp_host, tor_data):
     pki = DummyPKI()
     client_id = b"client"
     rand_reader = RandReader()
+
     transport_factory = OnionTransportFactory(reactor, params, tor_control_unix_socket)
-    transport = transport_factory.buildTransport()
     route_factory = RandomRouteFactory(params, pki, rand_reader)
     destination = pki.identities()[0]  # XXX todo: pick a more interesting destination
     message = b"ping"
-    client = PingClient(params, pki, client_id, rand_reader, transport, route_factory)
 
-    d = client.start()
+    d = transport_factory.buildTransport()
+    client = None
+
+    def got_transport(transport):
+        client = PingClient(params, pki, client_id, rand_reader, transport, route_factory)
+        return client.start()
+
+    d.addCallback(got_transport)
     d.addCallback(lambda ign: client.send(destination, message))
     d.addCallback(lambda ign: client.wait_for_reply())
 
