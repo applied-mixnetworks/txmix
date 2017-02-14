@@ -7,6 +7,7 @@ from twisted.internet import reactor
 from sphinxmixcrypto import SphinxParams, PacketReplayCacheDict
 
 from txmix import OnionTransportFactory, ThresholdMixNode
+from txmix.client import MixClient, RandomRouteFactory
 
 from test_txmix import generate_node_id, generate_node_keypair, FixedNoiseReader, SphinxNodeKeyState, DummyPKI
 
@@ -40,7 +41,7 @@ def test_onion_mix():
     threshold_count = 100
 
     mixes = []
-    for mix_num in range(10):
+    for mix_num in range(5):
         print "building mix %s" % mix_num
         node_id = generate_node_id(rand_reader)
         replay_cache = PacketReplayCacheDict()
@@ -56,3 +57,26 @@ def test_onion_mix():
     for mix_id in pki.identities():
         addr = pki.get_mix_addr("onion", mix_id)
         print "mix_id %s addr %r" % (binascii.hexlify(mix_id), addr)
+
+    # setup alice's client
+    alice_transport = yield transport_factory.build_transport()
+    alice_client_id = b"alice client"
+    route_factory = RandomRouteFactory(params, pki, rand_reader)
+
+    def alice_client_received(packet):
+        print "alice_client_received: packet len %s" % len(packet)
+
+    alice_client = MixClient(params, pki, alice_client_id, rand_reader, alice_transport, alice_client_received, route_factory)
+    yield alice_client.start()
+    print "alice's client started"
+
+    # setup bob's client
+    bob_transport = yield transport_factory.build_transport()
+    bob_client_id = b"bob client"
+
+    def bob_client_received(packet):
+        print "bob_client_received: packet len %s" % len(packet)
+
+    bob_client = MixClient(params, pki, bob_client_id, rand_reader, bob_transport, bob_client_received, route_factory)
+    yield bob_client.start()
+    print "bob's client started"
