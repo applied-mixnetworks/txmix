@@ -4,17 +4,13 @@ dist: precise
 env:
     - TOX_ENV=style
     - TOX_ENV=py27,stats TEST=integration
-
 before_install:
-  # Install tor and chutney if doing functional tests
+  # Install tor and chutney if doing integration tests
   - if [[ $TEST == 'integration' ]]; then ./test/scripts/install-tor.sh; fi
   - if [[ $TEST == 'integration' ]]; then source test/scripts/install-chutney.sh; fi
-
 install: "sudo apt-get update && sudo apt-get install -y python-dev && pip install -r requirements.txt && pip install -r requirements-dev.txt"
-
 script:
   - tox -c tox.ini -e $TOX_ENV
-
 after_success:
   - coveralls
   - codecov
