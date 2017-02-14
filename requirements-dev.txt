@@ -7,3 +7,4 @@ wheel
 pyflakes
 pep8
 pytest
+pytest-twisted
