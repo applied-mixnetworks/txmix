@@ -106,7 +106,7 @@ class OnionTransport(object, Protocol):
 
     @property
     def addr(self):
-        return self.onion_host, self.onion_key
+        return self.onion_host, self.onion_port
 
     def register_protocol(self, protocol):
         # XXX todo: assert that protocol provides the appropriate interface
