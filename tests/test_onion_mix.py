@@ -18,7 +18,12 @@ def test_onion_mix():
     params = SphinxParams(max_hops=5, payload_size=1024)
     tor_control_unix_socket = ""
     tor_control_tcp_host = "127.0.0.1"
-    tor_control_tcp_port = int(os.environ.get('CHUTNEY_CONTROL_PORT'))
+
+    chutney_control_port = os.environ.get('CHUTNEY_CONTROL_PORT')
+    if chutney_control_port is None:
+        print "CHUTNEY_CONTROL_PORT not set, aborting test"
+        return
+    tor_control_tcp_port = int(chutney_control_port)
     onion_unix_socket = ""
     onion_tcp_interface_ip = "127.0.0.1"
     transport_factory = OnionTransportFactory(reactor,
