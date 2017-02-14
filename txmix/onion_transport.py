@@ -16,6 +16,7 @@ because it's convenient that it accomplishes the first three properties.
 
 import attr
 from zope.interface import implementer
+from twisted.internet.protocol import Factory
 from twisted.internet import endpoints
 from twisted.internet.interfaces import IReactorCore
 from twisted.internet.protocol import Protocol
@@ -67,6 +68,7 @@ class OnionTransportFactory(object):
                                    onion_tcp_interface_ip=self.onion_tcp_interface_ip,
                                    onion_tcp_port=onion_tcp_port,
                                    )
+        yield hs.remove_from_tor(tor_control_protocol)
         defer.returnValue(transport)
 
 
@@ -102,6 +104,10 @@ class OnionTransport(object, Protocol):
     onion_tcp_interface_ip = attr.ib(validator=attr.validators.instance_of(str), default="")
     onion_tcp_port = attr.ib(validator=attr.validators.instance_of(int), default=0)
 
+    @property
+    def addr(self):
+        return self.onion_host, self.onion_key
+
     def register_protocol(self, protocol):
         # XXX todo: assert that protocol provides the appropriate interface
         self.protocol = protocol
@@ -117,9 +123,7 @@ class OnionTransport(object, Protocol):
         else:
             local_socket_endpoint_desc = "unix:%s" % self.onion_unix_socket
         onion_service_endpoint = endpoints.serverFromString(self.reactor, local_socket_endpoint_desc)
-        print "onion_service_endpoint %s" % onion_service_endpoint
-        d = endpoints.connectProtocol(onion_service_endpoint, self)
-        print "after endpoint connectProtocol"
+        d = onion_service_endpoint.listen(Factory.forProtocol(self))
 
         def got_socket(result):
             if len(self.onion_unix_socket) == 0:
