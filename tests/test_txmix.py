@@ -142,7 +142,7 @@ def build_mixnet_nodes(pki, params, rand_reader):
         yield mix.start()
         nodes[node_id] = mix
         addr_to_nodes[addr] = mix
-    defer.returnValue(nodes, addr_to_nodes)
+    defer.returnValue((nodes, addr_to_nodes))
 
 
 @defer.inlineCallbacks
