@@ -39,6 +39,7 @@ class UDPTransport(DatagramProtocol, object):
         where addr is a 2-tuple of type: (ip address, UDP port)
         """
         self.transport.write(message, addr)
+        return defer.succeed(None)
 
     def datagramReceived(self, datagram, addr):
         """
