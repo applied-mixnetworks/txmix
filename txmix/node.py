@@ -69,7 +69,6 @@ class ThresholdMixNode(object):
     """
     i am a threshold mix node
     """
-
     threshold_count = attr.ib(validator=attr.validators.instance_of(int))
     node_id = attr.ib(validator=is_16bytes)
     replay_cache = attr.ib(validator=attr.validators.provides(IPacketReplayCache))
@@ -78,8 +77,8 @@ class ThresholdMixNode(object):
     pki = attr.ib(validator=attr.validators.provides(IMixPKI))
     transport = attr.ib(validator=attr.validators.provides(IMixTransport))
     reactor = attr.ib(validator=attr.validators.provides(IReactorCore), default=reactor)
+    max_delay = attr.ib(default=600)
     _batch = attr.ib(init=False, default=[])  # list of 2-tuples [(destination, sphinx_packet)]
-    _max_delay = attr.ib(init=False, default=600)
 
     def start(self):
         """
@@ -106,7 +105,7 @@ class ThresholdMixNode(object):
                 released = self._batch
                 self._batch = []
                 random.shuffle(released)
-                delay = random.SystemRandom.randint(0, self._max_delay)
+                delay = random.SystemRandom.randint(0, self.max_delay)
                 self.reactor.callLater(delay, self.batch_send, released)
 
     @defer.inlineCallbacks
