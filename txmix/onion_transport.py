@@ -141,7 +141,7 @@ class OnionTransport(object, Protocol):
         send message to addr
         where addr is a 2-tuple of type: (onion host, onion port)
         """
-        tor_endpoint = endpoints.clientFromString("tor:%s:%s" % addr)
+        tor_endpoint = endpoints.clientFromString(self.reactor, "tor:%s:%s" % addr)
         send_message_protocol = Protocol()
 
         class OneShotSendProtocol(Protocol):
