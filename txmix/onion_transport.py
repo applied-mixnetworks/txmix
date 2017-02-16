@@ -8,10 +8,6 @@ transport does not:
  2. forward secrecy
  3. NAT penetration
  4. hides client location from mix node interaction
-
-I'm only interested in the first three properties.  Property 4 is
-already provided by the mix network, however we use the Tor transport
-because it's convenient that it accomplishes the first three properties.
 """
 
 import attr
@@ -23,52 +19,49 @@ from twisted.internet.protocol import Protocol
 from twisted.internet import defer
 from twisted.internet.error import ConnectionDone
 import txtorcon
-from txtorcon import ITorControlProtocol, EphemeralHiddenService
+from txtorcon import ITorControlProtocol, EphemeralHiddenService, TorClientEndpoint, TorConfig
 
 from sphinxmixcrypto import SphinxParams
 from txmix import IMixTransport
-
+from .buffer import Buffer
 
 @attr.s()
 class OnionTransportFactory(object):
 
     reactor = attr.ib(validator=attr.validators.provides(IReactorCore))
-    params = attr.ib(validator=attr.validators.instance_of(SphinxParams))
-    tor_control_unix_socket = attr.ib(validator=attr.validators.instance_of(str), default=None)
-    tor_control_tcp_host = attr.ib(validator=attr.validators.instance_of(str), default=None)
-    tor_control_tcp_port = attr.ib(validator=attr.validators.instance_of(int), default=None)
-    onion_unix_socket = attr.ib(validator=attr.validators.instance_of(str), default=None)
-    onion_tcp_interface_ip = attr.ib(validator=attr.validators.instance_of(str), default=None)
+    datagram_receive_size = attr.ib(validator=attr.validators.instance_of(int))
+    tor_control_unix_socket = attr.ib(validator=attr.validators.instance_of(str), default="")
+    tor_control_tcp_host = attr.ib(validator=attr.validators.instance_of(str), default="")
+    tor_control_tcp_port = attr.ib(validator=attr.validators.instance_of(int), default=0)
+    onion_unix_socket = attr.ib(validator=attr.validators.instance_of(str), default="")
+    onion_tcp_interface_ip = attr.ib(validator=attr.validators.instance_of(str), default="")
     onion_service_port = 999
 
     @defer.inlineCallbacks
     def build_transport(self):
         if len(self.tor_control_unix_socket) == 0:
             assert len(self.onion_tcp_interface_ip) != 0
-            control_socket_endpoint = "tcp:%s:%s" % (self.tor_control_tcp_host, self.tor_control_tcp_port)
+            tor_controller_endpoint_desc = "tcp:%s:%s" % (self.tor_control_tcp_host, self.tor_control_tcp_port)
         else:
-            control_socket_endpoint = "unix:%s" % self.tor_control_unix_socket
-        endpoint = endpoints.clientFromString(self.reactor, control_socket_endpoint.encode('utf-8'))
-        tor_control_protocol = yield txtorcon.build_tor_connection(endpoint, build_state=False)
+            tor_controller_endpoint_desc = "unix:%s" % self.tor_control_unix_socket
+        tor_controller_endpoint = endpoints.clientFromString(self.reactor, tor_controller_endpoint_desc)
+        tor = yield txtorcon.connect(self.reactor, control_endpoint=tor_controller_endpoint)
         onion_tcp_port = 0
         if len(self.onion_unix_socket) == 0:
             onion_tcp_port = yield txtorcon.util.available_tcp_port(self.reactor)
             hs = EphemeralHiddenService(["%s %s:%s" % (self.onion_service_port, self.onion_tcp_interface_ip, onion_tcp_port)])
         else:
             hs = EphemeralHiddenService(["%s unix:%s" % (self.onion_service_port, self.onion_unix_socket)])
-        yield hs.add_to_tor(tor_control_protocol)
-        alpha, beta, gamma, delta = self.params.get_dimensions()
-        sphinx_packet_size = alpha + beta + gamma + delta
+        yield hs.add_to_tor(tor.protocol)
         transport = OnionTransport(self.reactor,
-                                   sphinx_packet_size,
-                                   tor_control_protocol,
-                                   onion_host=hs.hostname,
+                                   self.datagram_receive_size,
+                                   tor,
+                                   onion_host=hs.hostname.encode('utf-8'),
                                    onion_port=self.onion_service_port,
-                                   onion_key=hs.private_key,
+                                   onion_key=hs.private_key.encode('utf-8'),
                                    onion_tcp_interface_ip=self.onion_tcp_interface_ip,
-                                   onion_tcp_port=onion_tcp_port,
-                                   )
-        yield hs.remove_from_tor(tor_control_protocol)
+                                   onion_tcp_port=onion_tcp_port)
+        yield hs.remove_from_tor(tor.protocol)
         defer.returnValue(transport)
 
 
@@ -86,20 +79,19 @@ class OnionTransport(object, Protocol):
     A Tor onion service is used for receiving messages.
     """
     name = "onion"
-    buffer = []
+    receive_buffer = Buffer()
 
     reactor = attr.ib(validator=attr.validators.provides(IReactorCore))
-    sphinx_packet_size = attr.ib(validator=attr.validators.instance_of(int))
-    tor_control_protocol = attr.ib(validator=attr.validators.provides(ITorControlProtocol))
+    datagram_receive_size = attr.ib(validator=attr.validators.instance_of(int))
+    tor = attr.ib(validator=attr.validators.instance_of(txtorcon.Tor))
 
     onion_host = attr.ib(validator=attr.validators.instance_of(str))
     onion_port = attr.ib(validator=attr.validators.instance_of(int))
     onion_key = attr.ib(validator=attr.validators.instance_of(bytes))
 
     # This transport can be configured to either use a tcp listener or
-    # a unix domain socket listener for receiving inbound Tor onion service
-    # connections. Some security sandboxing environments might enforce using
-    # unix domain sockets.
+    # a unix domain socket listener for receiving inbound Tor onion
+    # service connections.
     onion_unix_socket = attr.ib(validator=attr.validators.instance_of(str), default="")
     onion_tcp_interface_ip = attr.ib(validator=attr.validators.instance_of(str), default="")
     onion_tcp_port = attr.ib(validator=attr.validators.instance_of(int), default=0)
@@ -110,70 +102,63 @@ class OnionTransport(object, Protocol):
 
     def register_protocol(self, protocol):
         # XXX todo: assert that protocol provides the appropriate interface
-        self.protocol = protocol
+        self.mix_protocol = protocol
 
+    @defer.inlineCallbacks
     def start(self):
         """
         make this transport begin listening on the specified interface and UDP port
         interface must be an IP address
         """
+
+        # save a TorConfig so we can later use it to send messages
+        self.torconfig = TorConfig(control=self.tor.protocol)
+        yield self.torconfig.post_bootstrap
+
         hs_strings = []
         if len(self.onion_unix_socket) == 0:
             local_socket_endpoint_desc = "tcp:interface=%s:%s" % (self.onion_tcp_interface_ip, self.onion_tcp_port)
         else:
             local_socket_endpoint_desc = "unix:%s" % self.onion_unix_socket
         onion_service_endpoint = endpoints.serverFromString(self.reactor, local_socket_endpoint_desc)
-        d = onion_service_endpoint.listen(Factory.forProtocol(self))
+        yield onion_service_endpoint.listen(Factory.forProtocol(lambda: self))
 
-        def got_socket(result):
-            if len(self.onion_unix_socket) == 0:
-                hs_strings.append("%s %s:%s" % (self.onion_port, self.onion_tcp_interface_ip, self.onion_tcp_port))
-            else:
-                hs_strings.append("%s unix:%s" % (self.onion_port, self.onion_unix_socket))
-            hs = txtorcon.torconfig.EphemeralHiddenService(hs_strings, key_blob_or_type=self.onion_key)
-            d2 = hs.add_to_tor(self.tor_control_protocol)
-            return d2
-        d.addCallback(got_socket)
-        return d
+        if len(self.onion_unix_socket) == 0:
+            hs_strings.append("%s %s:%s" % (self.onion_port, self.onion_tcp_interface_ip, self.onion_tcp_port))
+        else:
+            hs_strings.append("%s unix:%s" % (self.onion_port, self.onion_unix_socket))
+        hs = txtorcon.torconfig.EphemeralHiddenService(hs_strings, key_blob_or_type=self.onion_key)
+        yield hs.add_to_tor(self.tor.protocol)
 
+    @defer.inlineCallbacks
     def send(self, addr, message):
         """
         send message to addr
         where addr is a 2-tuple of type: (onion host, onion port)
         """
-        tor_endpoint = endpoints.clientFromString(self.reactor, "tor:%s:%s" % addr)
+        onion_host, onion_port = addr
+        tor_endpoint = self.tor.stream_via(onion_host, onion_port)
         send_message_protocol = Protocol()
-
-        class OneShotSendProtocol(Protocol):
-            """
-            """
-        send_message_protocol = OneShotSendProtocol()
-        d = endpoints.connectProtocol(tor_endpoint, send_message_protocol)
-
-        def is_connected(protocol):
-            protocol.transport.write(message)
-            protocol.loseConnection()
-
-        d.addCallback(is_connected)
-        return d
+        self.remote_mix_protocol = yield endpoints.connectProtocol(tor_endpoint, send_message_protocol)
+        self.remote_mix_protocol.transport.write(message)
+        self.remote_mix_protocol.transport.loseConnection()
 
     # Protocol parent method overwriting
 
     def dataReceived(self, data):
-        if len(data) == self.sphinx_packet_size and len(self.buffer) == 0:
-            self.protocol.received(data)
+        # no buffering
+        if len(data) == self.datagram_receive_size and len(self.receive_buffer) == 0:
+            self.mix_protocol.received(data)
             return
 
-        if len(data) < self.sphinx_packet_size:
-            self.buffer.append(data)
-        elif len(data) > self.sphinx_packet_size:
-            self.buffer.append(data[self.sphinx_packet_size:])
-            self.protocol.received(data[:self.sphinx_packet_size])
-            return
+        # buffering
+        self.receive_buffer.write(data)
+        if len(self.receive_buffer) >= self.datagram_receive_size:
+            drained_data = self.receive_buffer.read(self.datagram_receive_size)
+            self.mix_protocol.received(drained_data)
 
     def connectionLost(self, reason):
         """
         Called when the connection is shut down.
         """
-        if not isinstance(reason, ConnectionDone):
-            raise OnionTransportConnectionFailure()
+        # XXX todo: throw an exception if the Failure contains an error of some sort?
