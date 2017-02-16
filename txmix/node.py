@@ -3,8 +3,8 @@ import attr
 import types
 import random
 from twisted.internet.interfaces import IReactorCore
-from twisted.internet import reactor
-from twisted.internet import defer
+from twisted.internet import reactor, defer
+from twisted.internet.task import deferLater
 
 from sphinxmixcrypto import sphinx_packet_unwrap, SphinxParams, SphinxPacket
 from sphinxmixcrypto import IPacketReplayCache, IKeyState, IMixPKI
@@ -63,6 +63,11 @@ def is_16bytes(instance, attribute, value):
     if not isinstance(value, bytes) or len(value) != 16:
         raise ValueError("must be 16 byte value")
 
+class UnimplementedError(Exception):
+    pass
+
+class InvalidSphinxPacketError(Exception):
+    pass
 
 @attr.s
 class ThresholdMixNode(object):
@@ -78,12 +83,13 @@ class ThresholdMixNode(object):
     transport = attr.ib(validator=attr.validators.provides(IMixTransport))
     reactor = attr.ib(validator=attr.validators.provides(IReactorCore), default=reactor)
     max_delay = attr.ib(default=600)
-    _batch = attr.ib(init=False, default=[])  # list of 2-tuples [(destination, sphinx_packet)]
 
     def start(self):
         """
         start the mix
         """
+        self._batch = [] # message batch is a list of 2-tuples [(destination, sphinx_packet)]
+        self._batch_d = None # deferred sending of the message batch
         self.protocol = NodeProtocol(self.replay_cache,
                                      self.key_state,
                                      self.params,
@@ -105,24 +111,32 @@ class ThresholdMixNode(object):
                 released = self._batch
                 self._batch = []
                 random.shuffle(released)
-                delay = random.SystemRandom.randint(0, self.max_delay)
-                self.reactor.callLater(delay, self.batch_send, released)
+                sys_rand = random.SystemRandom()
+                delay = sys_rand.randint(0, self.max_delay)
+                assert self._batch_d == None
+                self._batch_d = deferLater(self.reactor, delay, self.batch_send, released)
+                def batch_d_reset(result):
+                    self._batch_d = None
+                self._batch_d.addCallback(batch_d_reset)
+        elif result.client_hop:
+            self.client_message_send(*result.client_hop)
+        elif result.exit_hop:
+            raise UnimplementedError()
+        else:
+            raise InvalidSphinxPacketError()
+
+    @defer.inlineCallbacks
+    def client_message_send(self, client_id, message_id, client_message):
+            client_addr = self.pki.get_client_addr("onion", client_id)
+            message = bytes(message_id) + bytes(client_message.delta)
+            yield self.protocol.transport.send(client_addr, message)
 
     @defer.inlineCallbacks
     def batch_send(self, batch):
         """
         send a batch of mix net messages to their respective destinations
         """
-
-        if self._batch_d is not None:
-            yield self._batch_d
-        assert self._batch_d is None
         dl = []
         for destination, message in batch:
             dl.append(self.protocol.sphinx_packet_send(destination, message))
-        self.batch_d = defer.deferredList(dl)
-
-        def batch_deferred_reset(ign):
-            self.batch_d = None
-
-        self.batch_d.addCallback(batch_deferred_reset)
+        yield defer.DeferredList(dl)
