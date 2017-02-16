@@ -6,11 +6,12 @@ from zope.interface import implementer
 from twisted.internet import defer
 
 from sphinxmixcrypto import PacketReplayCacheDict, GroupCurve25519, SphinxParams, SECURITY_PARAMETER
-from sphinxmixcrypto import IReader, IKeyState, IMixPKI
+from sphinxmixcrypto import IReader, IKeyState
 
 from txmix.interfaces import IMixTransport
 from txmix.node import ThresholdMixNode
 from txmix.client import MixClient, RandomRouteFactory
+from txmix.utils import DummyPKI
 
 
 @implementer(IReader)
@@ -91,31 +92,6 @@ class DummyTransport(object):
     def send(self, addr, message):
         self.sent.append((addr, message))
         return defer.succeed(None)
-
-
-@implementer(IMixPKI)
-class DummyPKI(object):
-
-    def __init__(self):
-        self.node_map = {}
-        self.addr_map = {}
-
-    def set(self, node_id, pub_key, addr):
-        assert node_id not in self.node_map.keys()
-        self.node_map[node_id] = pub_key
-        self.addr_map[node_id] = addr
-
-    def get(self, node_id):
-        return self.node_map[node_id]
-
-    def identities(self):
-        return self.node_map.keys()
-
-    def get_mix_addr(self, transport_name, node_id):
-        return self.addr_map[node_id]
-
-    def rotate(self, node_id, new_pub_key, signature):
-        pass
 
 
 @defer.inlineCallbacks
