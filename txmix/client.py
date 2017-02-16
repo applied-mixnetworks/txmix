@@ -50,7 +50,7 @@ class ClientProtocol(object):
         decrypt the message and pass it to the message handler
         """
         message = self.sphinx_client.decrypt(message_id, ciphertext)
-        self.packet_receive_handler(message)
+        self.packet_received_handler(message)
 
     def send(self, route, message):
         """
@@ -106,6 +106,7 @@ class MixClient(object):
         self.protocol = ClientProtocol(self.params, self.pki, self.client_id, self.rand_reader,
                                        packet_received_handler=lambda x: self.message_received(x))
         d = self.protocol.make_connection(self.transport)
+        self.pki.set_client_addr("onion", self.protocol.client_id, self.transport.addr)
         return d
 
     def message_received(self, message):
