@@ -19,11 +19,11 @@ from twisted.internet.protocol import Protocol
 from twisted.internet import defer
 from twisted.internet.error import ConnectionDone
 import txtorcon
-from txtorcon import ITorControlProtocol, EphemeralHiddenService, TorClientEndpoint, TorConfig
+from txtorcon import EphemeralHiddenService, TorConfig
 
-from sphinxmixcrypto import SphinxParams
 from txmix import IMixTransport
 from .buffer import Buffer
+
 
 @attr.s()
 class OnionTransportFactory(object):
@@ -161,4 +161,5 @@ class OnionTransport(object, Protocol):
         """
         Called when the connection is shut down.
         """
-        # XXX todo: throw an exception if the Failure contains an error of some sort?
+        if not reason.check(ConnectionDone):
+            pass  # XXX todo: log an error

@@ -63,11 +63,14 @@ def is_16bytes(instance, attribute, value):
     if not isinstance(value, bytes) or len(value) != 16:
         raise ValueError("must be 16 byte value")
 
+
 class UnimplementedError(Exception):
     pass
 
+
 class InvalidSphinxPacketError(Exception):
     pass
+
 
 @attr.s
 class ThresholdMixNode(object):
@@ -88,8 +91,8 @@ class ThresholdMixNode(object):
         """
         start the mix
         """
-        self._batch = [] # message batch is a list of 2-tuples [(destination, sphinx_packet)]
-        self._batch_d = None # deferred sending of the message batch
+        self._batch = []  # message batch is a list of 2-tuples [(destination, sphinx_packet)]
+        self._batch_d = None  # deferred sending of the message batch
         self.protocol = NodeProtocol(self.replay_cache,
                                      self.key_state,
                                      self.params,
@@ -113,10 +116,12 @@ class ThresholdMixNode(object):
                 random.shuffle(released)
                 sys_rand = random.SystemRandom()
                 delay = sys_rand.randint(0, self.max_delay)
-                assert self._batch_d == None
+                assert self._batch_d is None
                 self._batch_d = deferLater(self.reactor, delay, self.batch_send, released)
+
                 def batch_d_reset(result):
                     self._batch_d = None
+
                 self._batch_d.addCallback(batch_d_reset)
         elif result.client_hop:
             self.client_message_send(*result.client_hop)
