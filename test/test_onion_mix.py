@@ -119,3 +119,4 @@ def test_onion_mix():
 
     for message_num in range(threshold_count):
         yield alice_received_d
+        alice_received_d = defer.Deferred()
