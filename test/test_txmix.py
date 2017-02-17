@@ -53,12 +53,14 @@ class SphinxNodeKeyState:
 
 @implementer(IReader)
 class ChachaNoiseReader():
-
+    """
+    hello, i am an entropy "iterator". sphinx uses a source of entropy
+    for generation of key material. i'm deterministic so use me to
+    write deterministic tests.
+    """
     def __init__(self, seed_string):
-        assert len(seed_string) == 64
-        seed = binascii.unhexlify(seed_string)
-        nonce = b"\x00" * 8
-        self.cipher = ChaCha20.new(key=seed, nonce=nonce)
+        assert isinstance(seed_string, str) and len(seed_string) == 64
+        self.cipher = ChaCha20.new(key=binascii.unhexlify(seed_string), nonce=b"\x00" * 8)
 
     def read(self, n):
         return self.cipher.encrypt(b"\x00" * n)
