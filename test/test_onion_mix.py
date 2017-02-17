@@ -45,7 +45,7 @@ def test_onion_mix():
     transport_factory = create_transport_factory(sphinx_packet_size, chutney_control_port)
     pki = DummyPKI()
     rand_reader = FixedNoiseReader("b5451d2eb2faf3f84bc4778ace6516e73e9da6c597e6f96f7e63c7ca6c9456018be9fd84883e4469a736c66fcaeceacf080fb06bc45859796707548c356c462594d1418b5349daf8fffe21a67affec10c0a2e3639c5bd9e8a9ddde5caf2e1db802995f54beae23305f2241c6517d301808c0946d5895bfd0d4b53d8ab2760e4ec8d4b2309eec239eedbab2c6ae532da37f3b633e256c6b551ed76321cc1f301d74a0a8a0673ea7e489e984543ca05fe0ff373a6f3ed4eeeaafd18292e3b182c25216aeb80a9411a57044d20b6c4004c730a78d79550dc2f22ba1c9c05e1d15e0fcadb6b1b353f028109fd193cb7c14af3251e6940572c7cd4243977896504ce0b59b17e8da04de5eb046a92f1877b55d43def3cc11a69a11050a8abdceb45bc1f09a22960fdffce720e5ed5767fbb62be1fd369dcdea861fd8582d01666a08bf3c8fb691ac5d2afca82f4759029f8425374ae4a4c91d44d05cb1a64193319d9413de7d2cfdffe253888535a8493ab8a0949a870ae512d2137630e2e4b2d772f6ee9d3b9d8cadd2f6dc34922701b21fa69f1be6d0367a26ca")
-    threshold_count = 0
+    threshold_count = 10
     max_delay = 10
     mixes = []
     for mix_num in range(5):
@@ -94,24 +94,28 @@ def test_onion_mix():
     yield bob_client.start()
     print "bob's client started"
 
-    message = b"hello Alice, this is Bob"
-    # XXX choose a more interesting destination
-    alice_route = route_factory.build_route(pki.identities()[0])
+    cascade_route = route_factory.build_route(pki.identities()[0])
 
-    # XXX create_nym method should be renamed to create_reply_block in
-    # a future version of sphinxmixcrypto
-    reply_block = alice_client.protocol.sphinx_client.create_nym(alice_route, pki)
+    for message_num in range(threshold_count + 2):
+        print "Bob sending message %s to Alice" % message_num
+        message = b"hello Alice, this is Bob. message %s" % message_num
 
-    # XXX hello, this API is terrible and needs to be fixed
-    n0, header0, ktilde = reply_block
-    block_cipher = SphinxLioness()
-    key = block_cipher.create_block_cipher_key(ktilde)
-    block = add_padding((b"\x00" * SECURITY_PARAMETER) + message, params.payload_size)
-    body = block_cipher.encrypt(key, block)
-    sphinx_packet = SphinxPacket(header0, SphinxBody(body))
+        # XXX create_nym method should be renamed to create_reply_block in
+        # a future version of sphinxmixcrypto
+        reply_block = alice_client.protocol.sphinx_client.create_nym(cascade_route, pki)
 
-    # XXX srsly we should not be reaching into the client like this. terrible.
-    # fix me
-    dest_addr = pki.get_mix_addr("onion", n0)
-    yield bob_client.protocol.transport.send(dest_addr, sphinx_packet.get_raw_bytes())
-    yield alice_received_d
+        # XXX hello, this API is terrible and needs to be fixed
+        n0, header0, ktilde = reply_block
+        block_cipher = SphinxLioness()
+        key = block_cipher.create_block_cipher_key(ktilde)
+        block = add_padding((b"\x00" * SECURITY_PARAMETER) + message, params.payload_size)
+        body = block_cipher.encrypt(key, block)
+        sphinx_packet = SphinxPacket(header0, SphinxBody(body))
+
+        # XXX srsly we should not be reaching into the client like this. terrible.
+        # fix me
+        dest_addr = pki.get_mix_addr("onion", n0)
+        yield bob_client.protocol.transport.send(dest_addr, sphinx_packet.get_raw_bytes())
+
+    for message_num in range(threshold_count):
+        yield alice_received_d
