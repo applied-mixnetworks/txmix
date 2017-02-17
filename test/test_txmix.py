@@ -4,6 +4,7 @@ import os
 import binascii
 from zope.interface import implementer
 from twisted.internet import defer
+from Cryptodome.Cipher import ChaCha20
 
 from sphinxmixcrypto import PacketReplayCacheDict, GroupCurve25519, SphinxParams, SECURITY_PARAMETER
 from sphinxmixcrypto import IReader, IKeyState
@@ -51,21 +52,16 @@ class SphinxNodeKeyState:
 
 
 @implementer(IReader)
-class FixedNoiseReader():
+class ChachaNoiseReader():
 
-    def __init__(self, hexed_noise):
-        self.noise = binascii.unhexlify(hexed_noise)
-        self.count = 0
-        self.fallback = RandReader()
+    def __init__(self, seed_string):
+        assert len(seed_string) == 64
+        seed = binascii.unhexlify(seed_string)
+        nonce = b"\x00" * 8
+        self.cipher = ChaCha20.new(key=seed, nonce=nonce)
 
     def read(self, n):
-        if n > len(self.noise):
-            print("%s > %s" % (n, len(self.noise)))
-            return self.fallback.read(n)
-        ret = self.noise[:n]
-        self.noise = self.noise[n:]
-        self.count += n
-        return ret
+        return self.cipher.encrypt(b"\x00" * n)
 
 
 @implementer(IMixTransport)
@@ -125,7 +121,7 @@ def build_mixnet_nodes(pki, params, rand_reader):
 def test_NodeProtocol():
     pki = DummyPKI()
     params = SphinxParams(5, 1024)
-    rand_reader = FixedNoiseReader("b5451d2eb2faf3f84bc4778ace6516e73e9da6c597e6f96f7e63c7ca6c9456018be9fd84883e4469a736c66fcaeceacf080fb06bc45859796707548c356c462594d1418b5349daf8fffe21a67affec10c0a2e3639c5bd9e8a9ddde5caf2e1db802995f54beae23305f2241c6517d301808c0946d5895bfd0d4b53d8ab2760e4ec8d4b2309eec239eedbab2c6ae532da37f3b633e256c6b551ed76321cc1f301d74a0a8a0673ea7e489e984543ca05fe0ff373a6f3ed4eeeaafd18292e3b182c25216aeb80a9411a57044d20b6c4004c730a78d79550dc2f22ba1c9c05e1d15e0fcadb6b1b353f028109fd193cb7c14af3251e6940572c7cd4243977896504ce0b59b17e8da04de5eb046a92f1877b55d43def3cc11a69a11050a8abdceb45bc1f09a22960fdffce720e5ed5767fbb62be1fd369dcdea861fd8582d01666a08bf3c8fb691ac5d2afca82f4759029f8425374ae4a4c91d44d05cb1a64193319d9413de7d2cfdffe253888535a8493ab8a0949a870ae512d2137630e2e4b2d772f6ee9d3b9d8cadd2f6dc34922701b21fa69f1be6d0367a26ca")
+    rand_reader = ChachaNoiseReader("47ade5905376604cde0b57e732936b4298281c8a67b6a62c6107482eb69e2941")
 
     nodes, addr_to_nodes = yield build_mixnet_nodes(pki, params, rand_reader)
     dummy_client_transport = DummyTransport(99)

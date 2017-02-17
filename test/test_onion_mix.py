@@ -10,7 +10,7 @@ from sphinxmixcrypto import add_padding, SECURITY_PARAMETER, SphinxPacket, Sphin
 from txmix import OnionTransportFactory, ThresholdMixNode
 from txmix.client import MixClient, RandomRouteFactory
 
-from test_txmix import generate_node_id, generate_node_keypair, FixedNoiseReader, SphinxNodeKeyState, DummyPKI
+from test_txmix import generate_node_id, generate_node_keypair, ChachaNoiseReader, SphinxNodeKeyState, DummyPKI
 
 
 def create_transport_factory(receive_size, tor_control_tcp_port):
@@ -44,7 +44,7 @@ def test_onion_mix():
     sphinx_packet_size = reduce(lambda a, b: a + b, params.get_dimensions())
     transport_factory = create_transport_factory(sphinx_packet_size, chutney_control_port)
     pki = DummyPKI()
-    rand_reader = FixedNoiseReader("b5451d2eb2faf3f84bc4778ace6516e73e9da6c597e6f96f7e63c7ca6c9456018be9fd84883e4469a736c66fcaeceacf080fb06bc45859796707548c356c462594d1418b5349daf8fffe21a67affec10c0a2e3639c5bd9e8a9ddde5caf2e1db802995f54beae23305f2241c6517d301808c0946d5895bfd0d4b53d8ab2760e4ec8d4b2309eec239eedbab2c6ae532da37f3b633e256c6b551ed76321cc1f301d74a0a8a0673ea7e489e984543ca05fe0ff373a6f3ed4eeeaafd18292e3b182c25216aeb80a9411a57044d20b6c4004c730a78d79550dc2f22ba1c9c05e1d15e0fcadb6b1b353f028109fd193cb7c14af3251e6940572c7cd4243977896504ce0b59b17e8da04de5eb046a92f1877b55d43def3cc11a69a11050a8abdceb45bc1f09a22960fdffce720e5ed5767fbb62be1fd369dcdea861fd8582d01666a08bf3c8fb691ac5d2afca82f4759029f8425374ae4a4c91d44d05cb1a64193319d9413de7d2cfdffe253888535a8493ab8a0949a870ae512d2137630e2e4b2d772f6ee9d3b9d8cadd2f6dc34922701b21fa69f1be6d0367a26ca")
+    rand_reader = ChachaNoiseReader("4704aff4bc2aaaa3fd187d52913a203aba4e19f6e7b491bda8c8e67daa8daa67")
     threshold_count = 10
     max_delay = 10
     mixes = []
