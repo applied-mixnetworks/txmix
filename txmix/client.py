@@ -1,12 +1,17 @@
 
 import attr
 import types
+import binascii
+
+from eliot import start_action
+from eliot.twisted import DeferredContext
+
+from zope.interface import implementer
 
 from sphinxmixcrypto import SphinxParams, SphinxClient, SphinxPacket
 from sphinxmixcrypto import IMixPKI, IReader
 
 from txmix import IMixTransport, IRouteFactory
-from zope.interface import implementer
 
 
 @attr.s
@@ -113,11 +118,22 @@ class MixClient(object):
         """
         receive a message
         """
-        self.message_received_handler(message)
+        action = start_action(
+            action_type=u"mix client:message received",
+            client_id=binascii.hexlify(self.client_id),
+        )
+        with action.context():
+            self.message_received_handler(message)
 
     def send(self, destination, message):
         """
         send a message to the given destination
         returns a deferred
         """
-        return self.protocol.send(self.route_factory.build_route(destination), message)
+        action = start_action(
+            action_type=u"mix client:message send",
+            client_id=binascii.hexlify(self.client_id),
+        )
+        with action.context():
+            d = self.protocol.send(self.route_factory.build_route(destination), message)
+            return DeferredContext(d).addActionFinish()

@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
 
-import pytest
-import os
 import binascii
+import json
+import os
+import sys
+import pytest
+
+
+from eliot import add_destination
 from twisted.internet import reactor, defer
 from sphinxmixcrypto import SphinxParams, PacketReplayCacheDict, SphinxLioness
 from sphinxmixcrypto import add_padding, SECURITY_PARAMETER, SphinxPacket, SphinxBody
@@ -11,6 +16,14 @@ from txmix import OnionTransportFactory, ThresholdMixNode
 from txmix.client import MixClient, RandomRouteFactory
 
 from test_txmix import generate_node_id, generate_node_keypair, ChachaNoiseReader, SphinxNodeKeyState, DummyPKI
+
+
+# tell eliot to log a line of json for each message to stdout
+def stdout(message):
+    sys.stdout.write(json.dumps(message) + "\n")
+
+
+add_destination(stdout)
 
 
 def create_transport_factory(receive_size, tor_control_tcp_port):

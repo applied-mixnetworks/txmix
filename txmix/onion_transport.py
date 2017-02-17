@@ -11,15 +11,20 @@ transport does not:
 """
 
 import attr
+
+from eliot import start_action, Message
+from eliot.twisted import DeferredContext
+
 from zope.interface import implementer
+
 from twisted.internet.protocol import Factory
 from twisted.internet import endpoints
 from twisted.internet.interfaces import IReactorCore
 from twisted.internet.protocol import Protocol
 from twisted.internet import defer
 from twisted.internet.error import ConnectionDone
+
 import txtorcon
-from txtorcon import EphemeralHiddenService, TorConfig
 
 from txmix import IMixTransport
 from .buffer import Buffer
@@ -37,8 +42,16 @@ class OnionTransportFactory(object):
     onion_tcp_interface_ip = attr.ib(validator=attr.validators.instance_of(str), default="")
     onion_service_port = 999
 
-    @defer.inlineCallbacks
     def build_transport(self):
+        action = start_action(
+            action_type=u"onion-transport-factory:build-transport",
+        )
+        with action.context():
+            d = self.do_build_transport()
+            return DeferredContext(d).addActionFinish()
+
+    @defer.inlineCallbacks
+    def do_build_transport(self):
         if len(self.tor_control_unix_socket) == 0:
             assert len(self.onion_tcp_interface_ip) != 0
             tor_controller_endpoint_desc = "tcp:%s:%s" % (self.tor_control_tcp_host, self.tor_control_tcp_port)
@@ -49,9 +62,9 @@ class OnionTransportFactory(object):
         onion_tcp_port = 0
         if len(self.onion_unix_socket) == 0:
             onion_tcp_port = yield txtorcon.util.available_tcp_port(self.reactor)
-            hs = EphemeralHiddenService(["%s %s:%s" % (self.onion_service_port, self.onion_tcp_interface_ip, onion_tcp_port)])
+            hs = txtorcon.EphemeralHiddenService(["%s %s:%s" % (self.onion_service_port, self.onion_tcp_interface_ip, onion_tcp_port)])
         else:
-            hs = EphemeralHiddenService(["%s unix:%s" % (self.onion_service_port, self.onion_unix_socket)])
+            hs = txtorcon.EphemeralHiddenService(["%s unix:%s" % (self.onion_service_port, self.onion_unix_socket)])
         yield hs.add_to_tor(tor.protocol)
         transport = OnionTransport(self.reactor,
                                    self.datagram_receive_size,
@@ -104,15 +117,28 @@ class OnionTransport(object, Protocol):
         # XXX todo: assert that protocol provides the appropriate interface
         self.mix_protocol = protocol
 
-    @defer.inlineCallbacks
     def start(self):
+        """
+        start the transport, call do_start
+        """
+        action = start_action(
+            action_type=u"onion-transport:start-onion-service",
+            onion_host=self.onion_host,
+            onion_port=self.onion_port,
+        )
+        with action.context():
+            d = self.do_start()
+            return DeferredContext(d).addActionFinish()
+
+    @defer.inlineCallbacks
+    def do_start(self):
         """
         make this transport begin listening on the specified interface and UDP port
         interface must be an IP address
         """
 
         # save a TorConfig so we can later use it to send messages
-        self.torconfig = TorConfig(control=self.tor.protocol)
+        self.torconfig = txtorcon.TorConfig(control=self.tor.protocol)
         yield self.torconfig.post_bootstrap
 
         hs_strings = []
@@ -130,8 +156,18 @@ class OnionTransport(object, Protocol):
         hs = txtorcon.torconfig.EphemeralHiddenService(hs_strings, key_blob_or_type=self.onion_key)
         yield hs.add_to_tor(self.tor.protocol)
 
-    @defer.inlineCallbacks
     def send(self, addr, message):
+        action = start_action(
+            action_type=u"onion-transport:send",
+            destination=addr,
+            message_size=len(message),
+        )
+        with action.context():
+            d = self.do_send(addr, message)
+            return DeferredContext(d).addActionFinish()
+
+    @defer.inlineCallbacks
+    def do_send(self, addr, message):
         """
         send message to addr
         where addr is a 2-tuple of type: (onion host, onion port)
@@ -146,6 +182,7 @@ class OnionTransport(object, Protocol):
     # Protocol parent method overwriting
 
     def dataReceived(self, data):
+        Message.log(event_type="onion transport data received", datagram_size=len(data))
         # no buffering
         if len(data) == self.datagram_receive_size and len(self.receive_buffer) == 0:
             self.mix_protocol.received(data)

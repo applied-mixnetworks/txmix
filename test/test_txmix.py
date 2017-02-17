@@ -1,18 +1,31 @@
 # -*- coding: utf-8 -*-
 
-import os
 import binascii
-from zope.interface import implementer
-from twisted.internet import defer
+import json
+import os
+import sys
+import pytest
+
+from eliot import add_destination
 from Cryptodome.Cipher import ChaCha20
+from twisted.internet import defer
+from zope.interface import implementer
 
 from sphinxmixcrypto import PacketReplayCacheDict, GroupCurve25519, SphinxParams, SECURITY_PARAMETER
 from sphinxmixcrypto import IReader, IKeyState
 
 from txmix.interfaces import IMixTransport
-from txmix.node import ThresholdMixNode
+from txmix.mix import ThresholdMixNode
 from txmix.client import MixClient, RandomRouteFactory
 from txmix.utils import DummyPKI
+
+
+# tell eliot to log a line of json for each message to stdout
+def stdout(message):
+    sys.stdout.write(json.dumps(message) + "\n")
+
+
+add_destination(stdout)
 
 
 @implementer(IReader)
@@ -119,8 +132,8 @@ def build_mixnet_nodes(pki, params, rand_reader):
     defer.returnValue((nodes, addr_to_nodes))
 
 
-@defer.inlineCallbacks
-def test_NodeProtocol():
+@pytest.inlineCallbacks
+def test_node_protocol():
     pki = DummyPKI()
     params = SphinxParams(5, 1024)
     rand_reader = ChachaNoiseReader("47ade5905376604cde0b57e732936b4298281c8a67b6a62c6107482eb69e2941")

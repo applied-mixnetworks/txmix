@@ -2,12 +2,18 @@
 import attr
 import types
 import random
+import binascii
+
+from eliot import start_action
+from eliot.twisted import DeferredContext
+
 from twisted.internet.interfaces import IReactorCore
 from twisted.internet import reactor, defer
 from twisted.internet.task import deferLater
 
 from sphinxmixcrypto import sphinx_packet_unwrap, SphinxParams, SphinxPacket
 from sphinxmixcrypto import IPacketReplayCache, IKeyState, IMixPKI
+
 from txmix.interfaces import IMixTransport
 
 
@@ -91,6 +97,7 @@ class ThresholdMixNode(object):
         """
         start the mix
         """
+        self._sys_rand = random.SystemRandom()
         self._batch = []  # message batch is a list of 2-tuples [(destination, sphinx_packet)]
         self._pending_batch_sends = set()
         self.protocol = NodeProtocol(self.replay_cache,
@@ -111,19 +118,40 @@ class ThresholdMixNode(object):
         if result.next_hop:
             self._batch.append(result.next_hop)  # [(destination, sphinx_packet)]
             if len(self._batch) >= self.threshold_count:
-                released = self._batch
-                self._batch = []
-                random.shuffle(released)
-                sys_rand = random.SystemRandom()
-                delay = sys_rand.randint(0, self.max_delay)
-                d = deferLater(self.reactor, delay, self.batch_send, released)
-                self._pending_batch_sends.add(d)
-                def _remove(res, d=d):
-                    self._pending_batch_sends.remove(d)
-                    return res
-                d.addBoth(_remove)
+                delay = self._sys_rand.randint(0, self.max_delay)
+
+                action = start_action(
+                    action_type=u"threshold-mix:batch-send",
+                    node_id=binascii.hexlify(self.node_id),
+                    threshold=self.threshold_count,
+                    send_delay=delay,
+                )
+                with action.context():
+                    released = self._batch
+                    self._batch = []
+                    random.shuffle(released)
+
+                    d = deferLater(self.reactor, delay, self.batch_send, released)
+                    DeferredContext(d).addActionFinish()
+                    self._pending_batch_sends.add(d)
+
+                    def _remove(res, d=d):
+                        self._pending_batch_sends.remove(d)
+                        return res
+
+                    d.addBoth(_remove)
         elif result.client_hop:
-            self.client_message_send(*result.client_hop)
+            client_id = binascii.hexlify(result.client_hop[0])
+            message_id = binascii.hexlify(result.client_hop[1])
+            action = start_action(
+                action_type=u"threshold-mix:send-to-client",
+                node_id=binascii.hexlify(self.node_id),
+                client_id=client_id,
+                message_id=message_id,
+            )
+            with action.context():
+                d = self.client_message_send(*result.client_hop)
+                DeferredContext(d).addActionFinish()
         elif result.exit_hop:
             raise UnimplementedError()
         else:
