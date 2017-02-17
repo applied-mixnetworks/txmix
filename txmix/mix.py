@@ -92,7 +92,7 @@ class ThresholdMixNode(object):
         start the mix
         """
         self._batch = []  # message batch is a list of 2-tuples [(destination, sphinx_packet)]
-        self._batch_d = None  # deferred sending of the message batch
+        self._pending_batch_sends = set()
         self.protocol = NodeProtocol(self.replay_cache,
                                      self.key_state,
                                      self.params,
@@ -116,13 +116,12 @@ class ThresholdMixNode(object):
                 random.shuffle(released)
                 sys_rand = random.SystemRandom()
                 delay = sys_rand.randint(0, self.max_delay)
-                assert self._batch_d is None
-                self._batch_d = deferLater(self.reactor, delay, self.batch_send, released)
-
-                def batch_d_reset(result):
-                    self._batch_d = None
-
-                self._batch_d.addCallback(batch_d_reset)
+                d = deferLater(self.reactor, delay, self.batch_send, released)
+                self._pending_batch_sends.add(d)
+                def _remove(res, d=d):
+                    self._pending_batch_sends.remove(d)
+                    return res
+                d.addBoth(_remove)
         elif result.client_hop:
             self.client_message_send(*result.client_hop)
         elif result.exit_hop:
