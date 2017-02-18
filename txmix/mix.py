@@ -48,8 +48,12 @@ class NodeProtocol(object):
         receive a raw_packet, decode it and unwrap/decrypt it
         and return the results
         """
-        sphinx_packet = SphinxPacket.from_raw_bytes(self.params, raw_sphinx_packet)
-        unwrapped_packet = sphinx_packet_unwrap(self.params, self.replay_cache, self.key_state, sphinx_packet)
+        action = start_action(
+            action_type=u"mix packet unwrap",
+        )
+        with action.context():
+            sphinx_packet = SphinxPacket.from_raw_bytes(self.params, raw_sphinx_packet)
+            unwrapped_packet = sphinx_packet_unwrap(self.params, self.replay_cache, self.key_state, sphinx_packet)
         self.packet_received_handler(unwrapped_packet)
 
     def sphinx_packet_send(self, mix_id, sphinx_packet):
