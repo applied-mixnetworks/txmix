@@ -2,7 +2,6 @@
 import attr
 import types
 import random
-import binascii
 
 from eliot import start_action
 from eliot.twisted import DeferredContext
@@ -12,7 +11,7 @@ from twisted.internet import reactor, defer
 from twisted.internet.task import deferLater
 
 from sphinxmixcrypto import sphinx_packet_unwrap, SphinxParams, SphinxPacket
-from sphinxmixcrypto import IPacketReplayCache, IKeyState, IMixPKI
+from sphinxmixcrypto import IPacketReplayCache, IKeyState, IMixPKI, UnwrappedMessage
 
 from txmix.interfaces import IMixTransport
 
@@ -20,7 +19,7 @@ from txmix.interfaces import IMixTransport
 @attr.s
 class NodeProtocol(object):
     """
-    i am a mix net node protocol responsible for decryption and
+    i am a mix net protocol responsible for decryption and
     message passing to my mix helper class.
     """
 
@@ -61,9 +60,52 @@ class NodeProtocol(object):
         given a SphinxPacket object I shall encode it into
         a raw packet and send it to the mix with mix_id
         """
-        addr = self.pki.get_mix_addr(self.transport.name, mix_id)
-        raw_sphinx_packet = sphinx_packet.get_raw_bytes()
-        return self.transport.send(addr, raw_sphinx_packet)
+        return self.send(mix_id, sphinx_packet.get_raw_bytes())
+
+    def send(self, destination, datagram):
+        """
+        given a SphinxPacket object I shall encode it into
+        a raw packet and send it to the mix with mix_id
+        """
+        mix_addr = self.pki.get_mix_addr(self.transport.name, destination)
+        return self.transport.send(mix_addr, datagram)
+
+    @defer.inlineCallbacks
+    def forward_to_client(self, client_id, message_id, client_message):
+        """
+        forward a ciphertext client message to a client
+        """
+        client_addr = self.pki.get_client_addr(self.transport.name, client_id)
+        message = bytes(message_id) + bytes(client_message.delta)
+        yield self.transport.send(client_addr, message)
+
+    def packet_proxy(self, unwrapped_packet):
+        """
+        receive the unwrapped packet and append it to the batch.
+        if the threshold is reached then we shuffle the batch
+        and send the batch out after a random delay.
+        """
+        assert isinstance(unwrapped_packet, UnwrappedMessage)
+        if unwrapped_packet.next_hop:
+            action = start_action(
+                action_type=u"proxy unwrapped packet to next hop",
+            )
+            with action.context():
+                destination, sphinx_packet = unwrapped_packet.next_hop
+                d = self.sphinx_packet_send(destination, sphinx_packet)
+                DeferredContext(d).addActionFinish()
+        elif unwrapped_packet.client_hop:
+            action = start_action(
+                action_type=u"proxy unwrapped packet to client hop",
+            )
+            with action.context():
+                d = self.forward_to_client(*unwrapped_packet.client_hop)
+                DeferredContext(d).addActionFinish()
+        elif unwrapped_packet.exit_hop:
+            raise UnimplementedError()
+        else:
+            raise InvalidSphinxPacketError()
+        return d
 
 
 def is_16bytes(instance, attribute, value):
@@ -85,7 +127,12 @@ class InvalidSphinxPacketError(Exception):
 @attr.s
 class ThresholdMixNode(object):
     """
-    i am a threshold mix node
+    i am a threshold mix node. my design is vulnerable to n-1 or blending attacks.
+
+    to learn more about these active attacks read this paper:
+    "From a Trickle to a Flood: Active Attacks on Several Mix Types"
+    by Andrei Serjantov, Roger Dingledine, and Paul Syverson
+    https://www.freehaven.net/anonbib/cache/trickle02.pdf
     """
     threshold_count = attr.ib(validator=attr.validators.instance_of(int))
     node_id = attr.ib(validator=is_16bytes)
@@ -108,64 +155,36 @@ class ThresholdMixNode(object):
                                      self.key_state,
                                      self.params,
                                      self.pki,
-                                     packet_received_handler=lambda x: self.packet_received(x))
+                                     packet_received_handler=lambda x: self.message_received(x))
         d = self.protocol.make_connection(self.transport)
         self.pki.set(self.node_id, self.key_state.get_public_key(), self.protocol.transport.addr)
         return d
 
-    def packet_received(self, result):
+    def message_received(self, unwrapped_message):
         """
-        receive the unwrapped packet and append it to the batch.
-        if the threshold is reached then we shuffle the batch
-        and send the batch out after a random delay.
+        message is of type UnwrappedMessage
         """
-        if result.next_hop:
-            self._batch.append(result.next_hop)  # [(destination, sphinx_packet)]
-            if len(self._batch) >= self.threshold_count:
-                delay = self._sys_rand.randint(0, self.max_delay)
 
-                action = start_action(
-                    action_type=u"threshold-mix:batch-send",
-                    node_id=binascii.hexlify(self.node_id),
-                    threshold=self.threshold_count,
-                    send_delay=delay,
-                )
-                with action.context():
-                    released = self._batch
-                    self._batch = []
-                    random.shuffle(released)
-
-                    d = deferLater(self.reactor, delay, self.batch_send, released)
-                    DeferredContext(d).addActionFinish()
-                    self._pending_batch_sends.add(d)
-
-                    def _remove(res, d=d):
-                        self._pending_batch_sends.remove(d)
-                        return res
-
-                    d.addBoth(_remove)
-        elif result.client_hop:
-            client_id = binascii.hexlify(result.client_hop[0])
-            message_id = binascii.hexlify(result.client_hop[1])
+        self._batch.append(unwrapped_message)  # [(destination, sphinx_packet)
+        if len(self._batch) >= self.threshold_count:
+            delay = self._sys_rand.randint(0, self.max_delay)
             action = start_action(
-                action_type=u"threshold-mix:send-to-client",
-                node_id=binascii.hexlify(self.node_id),
-                client_id=client_id,
-                message_id=message_id,
+                action_type=u"send delayed message batch",
+                delay=delay,
             )
             with action.context():
-                d = self.client_message_send(*result.client_hop)
+                released = self._batch
+                self._batch = []
+                random.shuffle(released)
+                d = deferLater(self.reactor, delay, self.batch_send, released)
                 DeferredContext(d).addActionFinish()
-        elif result.exit_hop:
-            raise UnimplementedError()
-        else:
-            raise InvalidSphinxPacketError()
+                self._pending_batch_sends.add(d)
 
-    @defer.inlineCallbacks
-    def client_message_send(self, client_id, message_id, client_message):
-            client_addr = self.pki.get_client_addr("onion", client_id)
-            message = bytes(message_id) + bytes(client_message.delta)
-            yield self.protocol.transport.send(client_addr, message)
+                def _remove(res, d=d):
+                    self._pending_batch_sends.remove(d)
+                    return res
+
+                d.addBoth(_remove)
 
     @defer.inlineCallbacks
     def batch_send(self, batch):
@@ -173,6 +192,6 @@ class ThresholdMixNode(object):
         send a batch of mix net messages to their respective destinations
         """
         dl = []
-        for destination, message in batch:
-            dl.append(self.protocol.sphinx_packet_send(destination, message))
+        for unwrapped_message in batch:
+            dl.append(self.protocol.packet_proxy(unwrapped_message))
         yield defer.DeferredList(dl)
