@@ -17,7 +17,7 @@ from txmix.interfaces import IMixTransport
 
 
 @attr.s
-class NodeProtocol(object):
+class MixProtocol(object):
     """
     i am a mix net protocol responsible for decryption and
     message passing to my mix helper class.
@@ -151,7 +151,7 @@ class ThresholdMixNode(object):
         self._sys_rand = random.SystemRandom()
         self._batch = []  # message batch is a list of 2-tuples [(destination, sphinx_packet)]
         self._pending_batch_sends = set()
-        self.protocol = NodeProtocol(self.replay_cache,
+        self.protocol = MixProtocol(self.replay_cache,
                                      self.key_state,
                                      self.params,
                                      self.pki,

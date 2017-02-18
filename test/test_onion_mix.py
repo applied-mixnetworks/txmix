@@ -77,7 +77,7 @@ def create_transport_factory(receive_size, tor_control_tcp_port):
 
 
 @attr.s()
-class FakeNodeProtocol(object, Protocol):
+class FakeMixProtocol(object, Protocol):
     """
     this protocol is useful for testing transports
     """
@@ -116,7 +116,7 @@ def test_onion_transport():
         received_buffer.append(packet)
         received_d.callback(None)
 
-    protocol = FakeNodeProtocol(packet_received)
+    protocol = FakeMixProtocol(packet_received)
     yield protocol.make_connection(transport)
     onion_host, onion_port = transport.addr
     tor_endpoint = transport.tor.stream_via(onion_host, onion_port)
