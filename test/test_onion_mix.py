@@ -1,20 +1,25 @@
 # -*- coding: utf-8 -*-
 
+import pytest
 import binascii
+import functools
+import attr
+import types
 import json
 import os
 import sys
-import pytest
-
+import txtorcon
 
 from eliot import add_destination
-from twisted.internet import reactor, defer
+from twisted.internet import reactor, defer, endpoints
+from twisted.internet.protocol import Protocol
+
 from sphinxmixcrypto import SphinxParams, PacketReplayCacheDict, SphinxLioness
 from sphinxmixcrypto import add_padding, SECURITY_PARAMETER, SphinxPacket, SphinxBody
 
-from txmix import OnionTransportFactory, ThresholdMixNode
+from txmix import OnionTransportFactory, ThresholdMixNode, IMixTransport
 from txmix.client import MixClient, RandomRouteFactory
-
+from txmix.onion_transport import OnionDatagramProxyFactory
 from test_txmix import generate_node_id, generate_node_keypair, ChachaNoiseReader, SphinxNodeKeyState, DummyPKI
 
 
@@ -24,6 +29,37 @@ def stdout(message):
 
 
 add_destination(stdout)
+
+
+@pytest.inlineCallbacks
+def test_onion_datagram_proxy():
+    received_buffer = []
+    received_d = defer.Deferred()
+
+    def received(data):
+        received_buffer.append(data)
+        received_d.callback(None)
+
+    received_size = 10
+    proxy_factory = OnionDatagramProxyFactory(received_size, received)
+    protocol = proxy_factory.buildProtocol(123)
+    packet = b"A" * received_size
+    protocol.dataReceived(packet)
+    assert received_buffer[0] == packet
+
+    service_port = yield txtorcon.util.available_tcp_port(reactor)
+    service_endpoint_desc = "tcp:interface=127.0.0.1:%s" % service_port
+    service_endpoint = endpoints.serverFromString(reactor, service_endpoint_desc)
+    yield service_endpoint.listen(proxy_factory)
+
+    client_endpoint_desc = "tcp:127.0.0.1:%s" % service_port
+    client_endpoint = endpoints.clientFromString(reactor, client_endpoint_desc)
+    client_protocol = Protocol()
+    yield endpoints.connectProtocol(client_endpoint, client_protocol)
+    client_protocol.transport.write(packet)
+    client_protocol.transport.loseConnection()
+    yield received_d
+    assert received_buffer[0] == packet
 
 
 def create_transport_factory(receive_size, tor_control_tcp_port):
@@ -41,12 +77,29 @@ def create_transport_factory(receive_size, tor_control_tcp_port):
     return transport_factory
 
 
-@pytest.inlineCallbacks
-def test_onion_mix():
+@attr.s()
+class FakeNodeProtocol(object, Protocol):
     """
-    hello, actually i'm more of an integration test than a unit test.
+    this protocol is useful for testing transports
     """
+    packet_received_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
 
+    def make_connection(self, transport):
+        assert IMixTransport.providedBy(transport)
+        transport.register_protocol(self)
+        d = transport.start()
+        self.transport = transport
+        return d
+
+    def received(self, raw_packet):
+        self.packet_received_handler(raw_packet)
+
+
+@pytest.inlineCallbacks
+def test_onion_transport():
+    """
+    integration test for onion transport
+    """
     chutney_control_port = os.environ.get('CHUTNEY_CONTROL_PORT')
     if chutney_control_port is None:
         print "CHUTNEY_CONTROL_PORT not set, aborting test"
@@ -54,7 +107,43 @@ def test_onion_mix():
 
     params = SphinxParams(max_hops=5, payload_size=1024)
     # XXX sphinx_packet_size = params.get_sphinx_forward_size()
-    sphinx_packet_size = reduce(lambda a, b: a + b, params.get_dimensions())
+    sphinx_packet_size = functools.reduce(lambda a, b: a + b, params.get_dimensions())
+    transport_factory = create_transport_factory(sphinx_packet_size, chutney_control_port)
+    transport = yield transport_factory.build_transport()
+    received_d = defer.Deferred()
+    received_buffer = []
+
+    def packet_received(packet):
+        print "packet received of len %s" % len(packet)
+        received_buffer.append(packet)
+        received_d.callback(None)
+
+    protocol = FakeNodeProtocol(packet_received)
+    yield protocol.make_connection(transport)
+    onion_host, onion_port = transport.addr
+    tor_endpoint = transport.tor.stream_via(onion_host, onion_port)
+    send_message_protocol = Protocol()
+    remote_mix_protocol = yield endpoints.connectProtocol(tor_endpoint, send_message_protocol)
+    message = b"A" * sphinx_packet_size
+    remote_mix_protocol.transport.write(message)
+    remote_mix_protocol.transport.loseConnection()
+    yield received_d
+    assert received_buffer[0] == message
+
+
+@pytest.inlineCallbacks
+def test_onion_mix():
+    """
+    integration test for threshold mix using onion transport
+    """
+    chutney_control_port = os.environ.get('CHUTNEY_CONTROL_PORT')
+    if chutney_control_port is None:
+        print "CHUTNEY_CONTROL_PORT not set, aborting test"
+        return
+
+    params = SphinxParams(max_hops=5, payload_size=1024)
+    # XXX sphinx_packet_size = params.get_sphinx_forward_size()
+    sphinx_packet_size = functools.reduce(lambda a, b: a + b, params.get_dimensions())
     transport_factory = create_transport_factory(sphinx_packet_size, chutney_control_port)
     pki = DummyPKI()
     rand_reader = ChachaNoiseReader("4704aff4bc2aaaa3fd187d52913a203aba4e19f6e7b491bda8c8e67daa8daa67")

@@ -11,15 +11,16 @@ transport does not:
 """
 
 import attr
+import types
 
-from eliot import start_action, Message
+from eliot import start_action
 from eliot.twisted import DeferredContext
 
 from zope.interface import implementer
 
 from twisted.internet.protocol import Factory
 from twisted.internet import endpoints
-from twisted.internet.interfaces import IReactorCore
+from twisted.internet.interfaces import IReactorCore, IProtocolFactory
 from twisted.internet.protocol import Protocol
 from twisted.internet import defer
 from twisted.internet.error import ConnectionDone
@@ -84,6 +85,49 @@ class OnionTransportConnectionFailure(Exception):
     """
 
 
+@attr.s()
+class OnionDatagramProxy(object, Protocol):
+    """
+    proxy datagrams from a stream to a datagram protocol
+    """
+    datagram_receive_size = attr.ib(validator=attr.validators.instance_of(int))
+    received_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
+    receive_buffer = attr.ib(validator=attr.validators.instance_of(Buffer), default=Buffer())
+
+    # Protocol parent method overwriting
+
+    def dataReceived(self, data):
+        if len(data) == self.datagram_receive_size and len(self.receive_buffer) == 0:
+            self.received_handler(data)
+            return
+
+        self.receive_buffer.write(data)
+        while len(self.receive_buffer) >= self.datagram_receive_size:
+            drained_data = self.receive_buffer.read(self.datagram_receive_size)
+            self.received_handler(drained_data)
+
+    def connectionLost(self, reason):
+        """
+        Called when the connection is shut down.
+        """
+        if not reason.check(ConnectionDone):
+            pass  # XXX todo: log an error
+
+
+@implementer(IProtocolFactory)
+@attr.s()
+class OnionDatagramProxyFactory(object, Factory):
+    """
+    proxy datagrams to received_handler
+    """
+    datagram_receive_size = attr.ib(validator=attr.validators.instance_of(int))
+    received_handler = attr.ib(validator=attr.validators.instance_of(types.FunctionType))
+
+    # IProtocolFactory methods
+    def buildProtocol(self, addr):
+        return OnionDatagramProxy(self.datagram_receive_size, lambda x: self.received_handler(x))
+
+
 @implementer(IMixTransport)
 @attr.s()
 class OnionTransport(object, Protocol):
@@ -92,7 +136,6 @@ class OnionTransport(object, Protocol):
     A Tor onion service is used for receiving messages.
     """
     name = "onion"
-    receive_buffer = Buffer()
 
     reactor = attr.ib(validator=attr.validators.provides(IReactorCore))
     datagram_receive_size = attr.ib(validator=attr.validators.instance_of(int))
@@ -136,7 +179,6 @@ class OnionTransport(object, Protocol):
         make this transport begin listening on the specified interface and UDP port
         interface must be an IP address
         """
-
         # save a TorConfig so we can later use it to send messages
         self.torconfig = txtorcon.TorConfig(control=self.tor.protocol)
         yield self.torconfig.post_bootstrap
@@ -147,8 +189,8 @@ class OnionTransport(object, Protocol):
         else:
             local_socket_endpoint_desc = "unix:%s" % self.onion_unix_socket
         onion_service_endpoint = endpoints.serverFromString(self.reactor, local_socket_endpoint_desc)
-        yield onion_service_endpoint.listen(Factory.forProtocol(lambda: self))
-
+        datagram_proxy_factory = OnionDatagramProxyFactory(self.datagram_receive_size, received_handler=lambda x: self.datagram_received(x))
+        yield onion_service_endpoint.listen(datagram_proxy_factory)
         if len(self.onion_unix_socket) == 0:
             hs_strings.append("%s %s:%s" % (self.onion_port, self.onion_tcp_interface_ip, self.onion_tcp_port))
         else:
@@ -181,18 +223,8 @@ class OnionTransport(object, Protocol):
 
     # Protocol parent method overwriting
 
-    def dataReceived(self, data):
-        Message.log(event_type="onion transport data received", datagram_size=len(data))
-        # no buffering
-        if len(data) == self.datagram_receive_size and len(self.receive_buffer) == 0:
-            self.mix_protocol.received(data)
-            return
-
-        # buffering
-        self.receive_buffer.write(data)
-        if len(self.receive_buffer) >= self.datagram_receive_size:
-            drained_data = self.receive_buffer.read(self.datagram_receive_size)
-            self.mix_protocol.received(drained_data)
+    def datagram_received(self, data):
+        self.mix_protocol.received(data)
 
     def connectionLost(self, reason):
         """
