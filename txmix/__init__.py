@@ -5,7 +5,7 @@ for constructing mix networks with reduced code complexity
 
 from txmix.interfaces import IMixTransport, IRouteFactory
 from txmix.common import NodeDescriptor
-from txmix.client import ClientProtocol, MixClient, RandomRouteFactory
+from txmix.client import ClientProtocol, MixClient, RandomRouteFactory, CascadeRouteFactory
 from txmix.mix import NodeProtocol, ThresholdMixNode
 from txmix.udp_transport import UDPTransport
 from txmix.onion_transport import OnionTransport, OnionTransportFactory
@@ -21,6 +21,7 @@ __all__ = [
 
     "IRouteFactory",
     "RandomRouteFactory",
+    "CascadeRouteFactory",
 
     "IMixTransport",
     "UDPTransport",

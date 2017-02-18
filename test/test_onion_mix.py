@@ -14,11 +14,10 @@ from eliot import add_destination
 from twisted.internet import reactor, defer, endpoints
 from twisted.internet.protocol import Protocol
 
-from sphinxmixcrypto import SphinxParams, PacketReplayCacheDict, SphinxLioness
-from sphinxmixcrypto import add_padding, SECURITY_PARAMETER, SphinxPacket, SphinxBody
+from sphinxmixcrypto import SphinxParams, PacketReplayCacheDict
 
 from txmix import OnionTransportFactory, ThresholdMixNode, IMixTransport
-from txmix.client import MixClient, RandomRouteFactory
+from txmix.client import MixClient, RandomRouteFactory, CascadeRouteFactory
 from txmix.onion_transport import OnionDatagramProxyFactory
 from test_txmix import generate_node_id, generate_node_keypair, ChachaNoiseReader, SphinxNodeKeyState, DummyPKI
 
@@ -106,8 +105,7 @@ def test_onion_transport():
         return
 
     params = SphinxParams(max_hops=5, payload_size=1024)
-    # XXX sphinx_packet_size = params.get_sphinx_forward_size()
-    sphinx_packet_size = functools.reduce(lambda a, b: a + b, params.get_dimensions())
+    sphinx_packet_size = params.get_sphinx_forward_size()
     transport_factory = create_transport_factory(sphinx_packet_size, chutney_control_port)
     transport = yield transport_factory.build_transport()
     received_d = defer.Deferred()
@@ -166,7 +164,9 @@ def test_onion_mix():
         addr = pki.get_mix_addr("onion", mix_id)
         print "mix_id %s addr %r" % (binascii.hexlify(mix_id), addr)
 
-    route_factory = RandomRouteFactory(params, pki, rand_reader)
+    random_route_factory = RandomRouteFactory(params, pki, rand_reader)
+    cascade_route = random_route_factory.build_route()
+    route_factory = CascadeRouteFactory(cascade_route)
 
     # setup alice's client
     client_receive_size = 1024 + 16
@@ -196,28 +196,10 @@ def test_onion_mix():
     yield bob_client.start()
     print "bob's client started"
 
-    cascade_route = route_factory.build_route(pki.identities()[0])
-
     for message_num in range(threshold_count + 2):
-        print "Bob sending message %s to Alice" % message_num
+        reply_block = alice_client.create_reply_block()
         message = b"hello Alice, this is Bob. message %s" % message_num
-
-        # XXX create_nym method should be renamed to create_reply_block in
-        # a future version of sphinxmixcrypto
-        reply_block = alice_client.protocol.sphinx_client.create_nym(cascade_route, pki)
-
-        # XXX hello, this API is terrible and needs to be fixed
-        n0, header0, ktilde = reply_block
-        block_cipher = SphinxLioness()
-        key = block_cipher.create_block_cipher_key(ktilde)
-        block = add_padding((b"\x00" * SECURITY_PARAMETER) + message, params.payload_size)
-        body = block_cipher.encrypt(key, block)
-        sphinx_packet = SphinxPacket(header0, SphinxBody(body))
-
-        # XXX srsly we should not be reaching into the client like this. terrible.
-        # fix me
-        dest_addr = pki.get_mix_addr("onion", n0)
-        yield bob_client.protocol.transport.send(dest_addr, sphinx_packet.get_raw_bytes())
+        yield alice_client.reply(reply_block, message)
 
     for message_num in range(threshold_count):
         yield alice_received_d
