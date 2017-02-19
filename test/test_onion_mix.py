@@ -2,7 +2,6 @@
 
 import pytest
 import binascii
-import functools
 import attr
 import types
 import json
@@ -16,7 +15,7 @@ from twisted.internet.protocol import Protocol
 
 from sphinxmixcrypto import SphinxParams, PacketReplayCacheDict
 
-from txmix import OnionTransportFactory, ThresholdMixNode, IMixTransport
+from txmix import OnionTransportFactory, ThresholdMixNode, IMixTransport, ContinuousTimeMixNode
 from txmix.client import MixClient, RandomRouteFactory, CascadeRouteFactory
 from txmix.onion_transport import OnionDatagramProxyFactory
 from test_txmix import generate_node_id, generate_node_keypair, ChachaNoiseReader, SphinxNodeKeyState, DummyPKI
@@ -130,7 +129,7 @@ def test_onion_transport():
 
 
 @pytest.inlineCallbacks
-def test_onion_mix():
+def test_onion_threshold_cascade_mix():
     """
     integration test for threshold mix using onion transport
     """
@@ -140,8 +139,7 @@ def test_onion_mix():
         return
 
     params = SphinxParams(max_hops=5, payload_size=1024)
-    # XXX sphinx_packet_size = params.get_sphinx_forward_size()
-    sphinx_packet_size = functools.reduce(lambda a, b: a + b, params.get_dimensions())
+    sphinx_packet_size = params.get_sphinx_forward_size()
     transport_factory = create_transport_factory(sphinx_packet_size, chutney_control_port)
     pki = DummyPKI()
     rand_reader = ChachaNoiseReader("4704aff4bc2aaaa3fd187d52913a203aba4e19f6e7b491bda8c8e67daa8daa67")
@@ -202,5 +200,56 @@ def test_onion_mix():
         yield alice_client.reply(reply_block, message)
 
     for message_num in range(threshold_count):
+        yield alice_received_d
+        alice_received_d = defer.Deferred()
+
+
+@pytest.inlineCallbacks
+def test_onion_continuous_time_mix():
+    """
+    integration test for continuous time mix
+    """
+    chutney_control_port = os.environ.get('CHUTNEY_CONTROL_PORT')
+    if chutney_control_port is None:
+        print "CHUTNEY_CONTROL_PORT not set, aborting test"
+        return
+
+    params = SphinxParams(max_hops=3, payload_size=1024)
+    sphinx_packet_size = params.get_sphinx_forward_size()
+    transport_factory = create_transport_factory(sphinx_packet_size, chutney_control_port)
+    pki = DummyPKI()
+    rand_reader = ChachaNoiseReader("4704aff4bc2aaaa3fd187d52913a203aba4e19f6e7b491bda8c8e67daa8daa67")
+    max_delay = 60
+    mixes = []
+    for mix_num in range(3):
+        node_id = generate_node_id(rand_reader)
+        replay_cache = PacketReplayCacheDict()
+        public_key, private_key = generate_node_keypair(rand_reader)
+        key_state = SphinxNodeKeyState(public_key, private_key)
+        transport = yield transport_factory.build_transport()
+        mix = ContinuousTimeMixNode(node_id, max_delay, transport, replay_cache, key_state, params, pki, reactor)
+        yield mix.start()
+        mixes.append(mix)
+
+    route_factory = RandomRouteFactory(params, pki, rand_reader)
+    client_receive_size = 1024 + 16
+    client_transport_factory = create_transport_factory(client_receive_size, chutney_control_port)
+    alice_transport = yield client_transport_factory.build_transport()
+    alice_client_id = b"alice client"
+    alice_received_d = defer.Deferred()
+
+    def alice_client_received(packet):
+        print "alice_client_received: %s" % packet.payload
+        alice_received_d.callback(None)
+
+    alice_client = MixClient(params, pki, alice_client_id, rand_reader, alice_transport, alice_client_received, route_factory)
+    yield alice_client.start()
+
+    for message_num in range(3):
+        reply_block = alice_client.create_reply_block()
+        message = b"hello Alice, this is Bob. message %s" % message_num
+        yield alice_client.reply(reply_block, message)
+
+    for message_num in range(3):
         yield alice_received_d
         alice_received_d = defer.Deferred()

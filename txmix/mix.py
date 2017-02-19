@@ -152,10 +152,10 @@ class ThresholdMixNode(object):
         self._batch = []  # message batch is a list of 2-tuples [(destination, sphinx_packet)]
         self._pending_batch_sends = set()
         self.protocol = MixProtocol(self.replay_cache,
-                                     self.key_state,
-                                     self.params,
-                                     self.pki,
-                                     packet_received_handler=lambda x: self.message_received(x))
+                                    self.key_state,
+                                    self.params,
+                                    self.pki,
+                                    packet_received_handler=lambda x: self.message_received(x))
         d = self.protocol.make_connection(self.transport)
         self.pki.set(self.node_id, self.key_state.get_public_key(), self.protocol.transport.addr)
         return d
@@ -195,3 +195,55 @@ class ThresholdMixNode(object):
         for unwrapped_message in batch:
             dl.append(self.protocol.packet_proxy(unwrapped_message))
         yield defer.DeferredList(dl)
+
+
+@attr.s
+class ContinuousTimeMixNode(object):
+    """
+    i am a continuous time mix. i am not vulnerable to the n-1 attacks.
+    but my design has other problems such as not enforcing anonymity/mix set size.
+    """
+    node_id = attr.ib(validator=is_16bytes)
+    max_delay = attr.ib(validator=attr.validators.instance_of(int))
+    transport = attr.ib(validator=attr.validators.provides(IMixTransport))
+    replay_cache = attr.ib(validator=attr.validators.provides(IPacketReplayCache))
+    key_state = attr.ib(validator=attr.validators.provides(IKeyState))
+    params = attr.ib(validator=attr.validators.instance_of(SphinxParams))
+    pki = attr.ib(validator=attr.validators.provides(IMixPKI))
+    reactor = attr.ib(validator=attr.validators.provides(IReactorCore), default=reactor)
+
+    def start(self):
+        """
+        start the mix
+        """
+        self._sys_rand = random.SystemRandom()
+        self._pending_sends = set()
+        self.protocol = MixProtocol(self.replay_cache,
+                                    self.key_state,
+                                    self.params,
+                                    self.pki,
+                                    packet_received_handler=lambda x: self.message_received(x))
+        d = self.protocol.make_connection(self.transport)
+        self.pki.set(self.node_id, self.key_state.get_public_key(), self.protocol.transport.addr)
+        return d
+
+    def message_received(self, unwrapped_message):
+        """
+        message is of type UnwrappedMessage
+        """
+
+        delay = self._sys_rand.randint(0, self.max_delay)
+        action = start_action(
+            action_type=u"send delayed message",
+            delay=delay,
+        )
+        with action.context():
+            d = deferLater(self.reactor, delay, self.protocol.packet_proxy, unwrapped_message)
+            DeferredContext(d).addActionFinish()
+            self._pending_sends.add(d)
+
+            def _remove(res, d=d):
+                self._pending_sends.remove(d)
+                return res
+
+            d.addBoth(_remove)
