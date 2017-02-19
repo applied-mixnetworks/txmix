@@ -2,7 +2,6 @@
 
 import binascii
 import json
-import os
 import sys
 import pytest
 
@@ -26,15 +25,6 @@ def stdout(message):
 
 
 add_destination(stdout)
-
-
-@implementer(IReader)
-class RandReader:
-    def __init__(self):
-        pass
-
-    def read(self, n):
-        return os.urandom(n)
 
 
 def generate_node_id(rand_reader):

@@ -65,7 +65,7 @@ def generate_node_id(rand_reader):
 
 
 @implementer(IReader)
-class RandReader:
+class EntropyReader:
     def __init__(self):
         pass
 

@@ -6,7 +6,7 @@ from sphinxmixcrypto import PacketReplayCacheDict, SphinxParams
 
 from txmix import OnionTransportFactory
 from txmix import ThresholdMixNode
-from txmix import RandReader, generate_node_keypair, generate_node_id, DummyPKI, SphinxNodeKeyState
+from txmix import EntropyReader, generate_node_keypair, generate_node_id, DummyPKI, SphinxNodeKeyState
 
 
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
@@ -22,7 +22,7 @@ def main(tor_control_unix_socket,
          onion_unix_socket,
          onion_tcp_interface_ip,
          tor_data):
-    rand_reader = RandReader()
+    rand_reader = EntropyReader()
     public_key, private_key = generate_node_keypair(rand_reader)
     node_id = generate_node_id(rand_reader)
     replay_cache = PacketReplayCacheDict()

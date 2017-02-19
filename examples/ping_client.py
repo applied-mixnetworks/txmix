@@ -7,7 +7,7 @@ from twisted.internet import reactor
 from sphinxmixcrypto import SphinxParams, IMixPKI, IReader
 from txmix import OnionTransportFactory
 from txmix import MixClient, RandomRouteFactory, IMixTransport, IRouteFactory
-from txmix import DummyPKI, RandReader
+from txmix import DummyPKI, EntropyReader
 
 
 @attr.s
@@ -65,7 +65,7 @@ def main(tor_control_unix_socket, tor_control_tcp_host, tor_data):
     params = SphinxParams(max_hops=5, payload_size=1024)
     pki = DummyPKI()
     client_id = b"client"
-    rand_reader = RandReader()
+    rand_reader = EntropyReader()
 
     transport_factory = OnionTransportFactory(reactor, params, tor_control_unix_socket)
     route_factory = RandomRouteFactory(params, pki, rand_reader)
