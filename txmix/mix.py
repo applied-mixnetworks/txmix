@@ -195,6 +195,12 @@ class ContinuousTimeMixNode(object):
     """
     i am a continuous time mix. i am not vulnerable to the n-1 attacks.
     but my design has other problems such as not enforcing anonymity/mix set size.
+    currently, my design is quite naive. I should instead be implemented with some
+    sort of exponential distribution for the delay.
+
+    you can read more about me in:
+    "The Traffic Analysis of Continuous-Time Mixes" by George Danezis
+    https://www.freehaven.net/anonbib/cache/danezis:pet2004.pdf
     """
     node_id = attr.ib(validator=is_16bytes)
     max_delay = attr.ib(validator=attr.validators.instance_of(int))
