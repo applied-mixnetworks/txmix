@@ -18,7 +18,7 @@ from sphinxmixcrypto import SphinxParams, PacketReplayCacheDict
 from txmix import OnionTransportFactory, ThresholdMixNode, IMixTransport, ContinuousTimeMixNode
 from txmix.client import MixClient, RandomRouteFactory, CascadeRouteFactory
 from txmix.onion_transport import OnionDatagramProxyFactory
-from test_txmix import generate_node_id, generate_node_keypair, ChachaNoiseReader, SphinxNodeKeyState, DummyPKI
+from test_txmix import generate_node_id, generate_node_keypair, ChachaNoiseReader, MixKeyState, DummyPKI
 
 
 # tell eliot to log a line of json for each message to stdout
@@ -151,7 +151,7 @@ def test_onion_threshold_cascade_mix():
         node_id = generate_node_id(rand_reader)
         replay_cache = PacketReplayCacheDict()
         public_key, private_key = generate_node_keypair(rand_reader)
-        key_state = SphinxNodeKeyState(public_key, private_key)
+        key_state = MixKeyState(public_key, private_key)
         transport = yield transport_factory.build_transport()
         mix = ThresholdMixNode(threshold_count, node_id, replay_cache, key_state, params, pki, transport, reactor, max_delay)
         yield mix.start()
@@ -225,7 +225,7 @@ def test_onion_continuous_time_mix():
         node_id = generate_node_id(rand_reader)
         replay_cache = PacketReplayCacheDict()
         public_key, private_key = generate_node_keypair(rand_reader)
-        key_state = SphinxNodeKeyState(public_key, private_key)
+        key_state = MixKeyState(public_key, private_key)
         transport = yield transport_factory.build_transport()
         mix = ContinuousTimeMixNode(node_id, max_delay, transport, replay_cache, key_state, params, pki, reactor)
         yield mix.start()

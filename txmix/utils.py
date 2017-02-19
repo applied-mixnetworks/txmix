@@ -1,16 +1,33 @@
 
 import os
+import attr
 from zope.interface.declarations import implementer
 
 from sphinxmixcrypto import IReader, IMixPKI, IKeyState, GroupCurve25519, SECURITY_PARAMETER
 
 
-@implementer(IKeyState)
-class SphinxNodeKeyState:
+def is_16bytes(instance, attribute, value):
+    """
+    validator for node_id which should be a 16 byte value
+    """
+    if not isinstance(value, bytes) or len(value) != 16:
+        raise ValueError("must be 16 byte value")
 
-    def __init__(self, public_key, private_key):
-        self.public_key = public_key
-        self.private_key = private_key
+
+def is_32bytes(instance, attribute, value):
+    """
+    validator for node_id which should be a 32 byte value
+    """
+    if not isinstance(value, bytes) or len(value) != 32:
+        raise ValueError("must be 32 byte value")
+
+
+@implementer(IKeyState)
+@attr.s
+class MixKeyState(object):
+
+    public_key = attr.ib(validator=is_32bytes)
+    private_key = attr.ib(validator=is_32bytes)
 
     def get_private_key(self):
         return self.private_key

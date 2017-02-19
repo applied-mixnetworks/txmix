@@ -41,7 +41,7 @@ def generate_node_keypair(rand_reader):
 
 
 @implementer(IKeyState)
-class SphinxNodeKeyState:
+class MixKeyState:
 
     def __init__(self, public_key, private_key):
         self.public_key = public_key
@@ -110,7 +110,7 @@ def build_mixnet_nodes(pki, params, rand_reader):
         addr = i
         public_key, private_key = generate_node_keypair(rand_reader)
         replay_cache = PacketReplayCacheDict()
-        key_state = SphinxNodeKeyState(public_key, private_key)
+        key_state = MixKeyState(public_key, private_key)
         params = SphinxParams(5, 1024)  # 5 hops max and payload 1024 bytes
         transport = DummyTransport(i)
         node_id = generate_node_id(rand_reader)

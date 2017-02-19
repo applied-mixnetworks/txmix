@@ -14,6 +14,7 @@ from sphinxmixcrypto import sphinx_packet_unwrap, SphinxParams, SphinxPacket
 from sphinxmixcrypto import IPacketReplayCache, IKeyState, IMixPKI, UnwrappedMessage
 
 from txmix.interfaces import IMixTransport
+from txmix.utils import is_16bytes
 
 
 @attr.s
@@ -106,14 +107,6 @@ class MixProtocol(object):
         else:
             raise InvalidSphinxPacketError()
         return d
-
-
-def is_16bytes(instance, attribute, value):
-    """
-    validator for node_id which should be a 16 byte value
-    """
-    if not isinstance(value, bytes) or len(value) != 16:
-        raise ValueError("must be 16 byte value")
 
 
 class UnimplementedError(Exception):
