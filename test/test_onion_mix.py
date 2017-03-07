@@ -12,6 +12,7 @@ import txtorcon
 from eliot import add_destination
 from twisted.internet import reactor, defer, endpoints
 from twisted.internet.protocol import Protocol
+from twisted.protocols.basic import Int32StringReceiver
 
 from sphinxmixcrypto import SphinxParams, PacketReplayCacheDict
 
@@ -39,10 +40,10 @@ def test_onion_datagram_proxy():
         received_d.callback(None)
 
     received_size = 10
-    proxy_factory = OnionDatagramProxyFactory(received_size, received)
+    proxy_factory = OnionDatagramProxyFactory(received)
     protocol = proxy_factory.buildProtocol(123)
     packet = b"A" * received_size
-    protocol.dataReceived(packet)
+    protocol.stringReceived(packet)
     assert received_buffer[0] == packet
 
     service_port = yield txtorcon.util.available_tcp_port(reactor)
@@ -52,9 +53,10 @@ def test_onion_datagram_proxy():
 
     client_endpoint_desc = "tcp:127.0.0.1:%s" % service_port
     client_endpoint = endpoints.clientFromString(reactor, client_endpoint_desc)
-    client_protocol = Protocol()
+    client_protocol = Int32StringReceiver()
     yield endpoints.connectProtocol(client_endpoint, client_protocol)
-    client_protocol.transport.write(packet)
+    client_protocol.sendString(packet)
+    print "BEFORE CLOSE"
     client_protocol.transport.loseConnection()
     yield received_d
     assert received_buffer[0] == packet
@@ -66,7 +68,6 @@ def create_transport_factory(receive_size, tor_control_tcp_port):
     onion_unix_socket = ""
     onion_tcp_interface_ip = "127.0.0.1"
     transport_factory = OnionTransportFactory(reactor,
-                                              receive_size,
                                               tor_control_unix_socket,
                                               tor_control_tcp_host,
                                               int(tor_control_tcp_port),
@@ -76,7 +77,7 @@ def create_transport_factory(receive_size, tor_control_tcp_port):
 
 
 @attr.s()
-class FakeMixProtocol(object, Protocol):
+class FakeMixProtocol(object):
     """
     this protocol is useful for testing transports
     """
@@ -119,10 +120,10 @@ def test_onion_transport():
     yield protocol.make_connection(transport)
     onion_host, onion_port = transport.addr
     tor_endpoint = transport.tor.stream_via(onion_host, onion_port)
-    send_message_protocol = Protocol()
+    send_message_protocol = Int32StringReceiver()
     remote_mix_protocol = yield endpoints.connectProtocol(tor_endpoint, send_message_protocol)
     message = b"A" * sphinx_packet_size
-    remote_mix_protocol.transport.write(message)
+    remote_mix_protocol.sendString(message)
     remote_mix_protocol.transport.loseConnection()
     yield received_d
     assert received_buffer[0] == message
