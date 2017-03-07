@@ -13,16 +13,4 @@ cd chutney
 client_torrc=$(find net/nodes -wholename "*c/torrc" | head -n1)
 control_port=$(grep -Po -m1 "ControlPort\s(\d+)$" $client_torrc | awk '{print $2}')
 export CHUTNEY_CONTROL_PORT="$control_port"
-n=0
-until [ $n -ge 10 ]
-do
-  output=$(./chutney verify networks/basic-025)
-  # Check if chutney output included 'Transmission: Success'.
-  if [[ $output == *"Transmission: Success"* ]]; then
-    break
-  else
-    n=$[$n+1]
-    sleep 5
-  fi
-done
-cd ..
+./chutney verify networks/basic-025
