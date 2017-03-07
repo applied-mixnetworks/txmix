@@ -13,4 +13,5 @@ cd chutney
 client_torrc=$(find net/nodes -wholename "*c/torrc" | head -n1)
 control_port=$(grep -Po -m1 "ControlPort\s(\d+)$" $client_torrc | awk '{print $2}')
 export CHUTNEY_CONTROL_PORT="$control_port"
-./chutney verify networks/basic-025
+
+echo chutney control port is $CHUTNEY_CONTROL_PORT
