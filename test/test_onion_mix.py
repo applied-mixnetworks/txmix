@@ -11,7 +11,6 @@ import txtorcon
 
 from eliot import add_destination
 from twisted.internet import reactor, defer, endpoints
-from twisted.internet.protocol import Protocol
 from twisted.protocols.basic import Int32StringReceiver
 
 from sphinxmixcrypto import SphinxParams, PacketReplayCacheDict
