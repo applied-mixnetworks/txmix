@@ -10,7 +10,9 @@ cd chutney
 ./chutney status networks/basic-025
 
 # Retry verify until Tor circuit creation is working
+echo before find
 client_torrc=$(find net/nodes -wholename "*c/torrc" | head -n1)
+echo before grep $client_torrc
 control_port=$(grep -Po -m1 "ControlPort\s(\d+)$" $client_torrc | awk '{print $2}')
 export CHUTNEY_CONTROL_PORT="$control_port"
 
