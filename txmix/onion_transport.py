@@ -142,7 +142,7 @@ class OnionTransport(object):
 
     def register_protocol(self, protocol):
         # XXX todo: assert that protocol provides the appropriate interface
-        self.mix_protocol = protocol
+        self.protocol = protocol
 
     def start(self):
         """
@@ -201,14 +201,14 @@ class OnionTransport(object):
         onion_host, onion_port = addr
         tor_endpoint = self.tor.stream_via(onion_host, onion_port)
         send_message_protocol = Int32StringReceiver()
-        self.remote_mix_protocol = yield endpoints.connectProtocol(tor_endpoint, send_message_protocol)
-        self.remote_mix_protocol.sendString(message)
-        self.remote_mix_protocol.transport.loseConnection()
+        self.remote_protocol = yield endpoints.connectProtocol(tor_endpoint, send_message_protocol)
+        self.remote_protocol.sendString(message)
+        self.remote_protocol.transport.loseConnection()
 
     # Protocol parent method overwriting
 
     def datagram_received(self, data):
-        self.mix_protocol.received(data)
+        self.protocol.received(data)
 
     def connectionLost(self, reason):
         """
